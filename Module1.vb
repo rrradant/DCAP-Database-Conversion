@@ -11,9 +11,10 @@ Module Module1
         Dim dbDA_Orig, dbDA_Stops As SqlDataAdapter
         Dim dbCmdRead, dbCmdRStops, dbCmdWStat, dbCmdWCond, dbCmdWStop As SqlCommand
         Dim dbConnOld, dbConnNew As SqlConnection
+        Dim Record, StopRow As DataRow
         Dim strReadOrigSQL, strReadStopsSQL, strWriteStatusSQL, strWriteConditionSQL, strWriteStopsSQL As String
         Dim strConnOld, strConnNew, strMsg As String
-        Dim NewStatusID, TempStatusID As Long
+        Dim NewStatusID, TempStatusID, n, i As Long
 
         'Define connection strings
         strConnOld = "Data Source=CT0000141\SQLEXPRESS_RRR;Initial Catalog=ProductionData;Trusted_Connection=Yes;Connection Timeout=15;"
@@ -92,7 +93,7 @@ Module Module1
                 & "SELECT SCOPE_IDENTITY();"
         'Append to the unified Stops table all existing Stop entries, referencing the new StatusID returned
         'previously from the SCOPE_IDENTITY in strWriteStatusSQL
-        strWriteStopsSQL = "INSERT INTO [Stops] (StatusID, MStop, OStop, MStopCode, OStopCode, StopCode) " _
+        strWriteStopsSQL = "INSERT INTO [Stopsss] (StatusID, MStop, OStop, MStopCode, OStopCode, StopCode) " _
                 & "VALUES (@StopStatusID, @MStop, @OStop, @MStopCode, @OStopCode, @StopCode)" _
                 & "SELECT SCOPE_IDENTITY();"
 
@@ -133,7 +134,6 @@ Module Module1
             Threading.Thread.Sleep(2000)
             'Start stopwatch for timing purposes
             sw.Start()
-            Dim Record As DataRow
             For n = 0 To dbDT_Orig.Rows.Count - 1
                 Record = dbDT_Orig.Rows(n)
                 'Status update handling
@@ -220,26 +220,29 @@ Module Module1
                             TempStatusID = 0
                             TempStatusID = dbCmdWStop.ExecuteScalar()
                             If TempStatusID = 0 Then
-                                Throw New Exception("Invalid return of TempStatusID after dbCmdWCond.ExecuteScalar() writing new Condition fields.")
+                                Throw New Exception("Invalid return of TempStatusID after dbCmdWCond.ExecuteScalar() writing new Stop fields.")
                             End If
                         End If
                     Else 'Process Stops data
-                        'Add a Stop record, with StopCode being 0
-                        If Record("MachFault") = True Then
-                            Param301.Value = False  'Not MStop
-                            Param302.Value = True   'Is an OStop
-                        End If
-                        Param303.Value = 0  'MStopCode
-                        Param304.Value = 0  'OStopCode
-                        Param305.Value = 0  'Unified Stop Code
-                        'Write to Stops table now
-                        TempStatusID = 0
-                        TempStatusID = dbCmdWStop.ExecuteScalar()
-                        If TempStatusID = 0 Then
-                            Throw New Exception("Invalid return of TempStatusID after dbCmdWCond.ExecuteScalar() writing new Condition fields.")
-                        End If
+                        For i = 0 To dbDT_Stops.Rows.Count - 1
+                            StopRow = dbDT_Stops.Rows(i)
+                            Param301.Value = StopRow("MStop")   'MStop
+                            Param302.Value = StopRow("OStop")   'OStop
+                            Param303.Value = StopRow("MStopCode")   'MStopCode
+                            Param304.Value = StopRow("OStopCode") 'OStopCode
+                            If StopRow("Mstop") = True Then
+                                Param305.Value = StopRow("MStopCode") 'Unified Code
+                            Else
+                                Param305.Value = StopRow("OStopCode") 'Unified Code
+                            End If
 
-
+                            'Write to Stops table now
+                            TempStatusID = 0
+                            TempStatusID = dbCmdWStop.ExecuteScalar()
+                            If TempStatusID = 0 Then
+                                Throw New Exception("Invalid return of TempStatusID after dbCmdWCond.ExecuteScalar() writing new Stop fields.")
+                            End If
+                        Next i
                     End If
 
                 End If
@@ -250,7 +253,7 @@ Module Module1
             Form1.TextBox3.Text = (sw.Elapsed).TotalSeconds.ToString
             sw.Stop()
         Catch ex As Exception
-            MsgBox(ex.Message, MsgBoxStyle.Information, "Exception Warning")
+            MsgBox(ex.Message & vbCrLf & "StatusID:" & Record("StatusID").ToString, MsgBoxStyle.Information, "Exception Warning")
         End Try
 
     End Sub
