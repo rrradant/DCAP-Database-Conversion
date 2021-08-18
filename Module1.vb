@@ -201,10 +201,45 @@ Module Module1
                     strMsg = ""
                     StopsCount = 0
                     StopsCount = dbDA_Stops.Fill(dbDT_Stops)
-                    If StopsCount = 0 Then
-                        strMsg = "Machine Stop with no Stops entered, " & "StatusID:" & Record("StatusID").ToString & ", " _
+                    If StopsCount = 0 Then 'No cooresponding Stops in table for StatusID
+                        strMsg = "Machine or Operator Stop with no Stops entered, " & "StatusID:" & Record("StatusID").ToString & ", " _
                             & "MachFault:" & Record("MachFault").ToString & ", " & "OpStop:" & Record("OpStop").ToString
                         Call Write2Log(strMsg)
+                        If Record("MachFault") = True Then
+                            'There is nothing to do in this case. This conditional is for holding and future use.
+                        End If
+                        If Record("OpStop") = True Then
+                            'Add a Stop record, with StopCode being 0
+                            'Stop Values
+                            Param301.Value = False  'Not MStop
+                            Param302.Value = True   'Is an OStop
+                            Param303.Value = 0  'MStopCode
+                            Param304.Value = 0  'OStopCode
+                            Param305.Value = 0  'Unified Stop Code
+                            'Write to Stops table now
+                            TempStatusID = 0
+                            TempStatusID = dbCmdWStop.ExecuteScalar()
+                            If TempStatusID = 0 Then
+                                Throw New Exception("Invalid return of TempStatusID after dbCmdWCond.ExecuteScalar() writing new Condition fields.")
+                            End If
+                        End If
+                    Else 'Process Stops data
+                        'Add a Stop record, with StopCode being 0
+                        If Record("MachFault") = True Then
+                            Param301.Value = False  'Not MStop
+                            Param302.Value = True   'Is an OStop
+                        End If
+                        Param303.Value = 0  'MStopCode
+                        Param304.Value = 0  'OStopCode
+                        Param305.Value = 0  'Unified Stop Code
+                        'Write to Stops table now
+                        TempStatusID = 0
+                        TempStatusID = dbCmdWStop.ExecuteScalar()
+                        If TempStatusID = 0 Then
+                            Throw New Exception("Invalid return of TempStatusID after dbCmdWCond.ExecuteScalar() writing new Condition fields.")
+                        End If
+
+
                     End If
 
                 End If
