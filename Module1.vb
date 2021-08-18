@@ -76,7 +76,8 @@ Module Module1
         'Generate SQL strings
         'Read all rows from Original Status_RST-XVI table
         'strReadOrigSQL = "SELECT * FROM [Status_RST-XVI] WHERE MachFault = 1 OR OpStop = 1 ORDER BY STAMP ASC;"
-        strReadOrigSQL = "SELECT top (100000) * FROM [Status_RST-XVI] WHERE StatusID >1000000 ORDER BY STAMP ASC;"
+        'strReadOrigSQL = "SELECT top (200000) * FROM [Status_RST-XVI] WHERE StatusID >2000000 ORDER BY STAMP ASC;"
+        strReadOrigSQL = "SELECT * FROM [Status_RST-XVI] ORDER BY STAMP ASC;"
         'Read all Stops for a given StatusID
         strReadStopsSQL = "SELECT * FROM Stops WHERE (StatusID = @OrigStatusID) " _
                 & "ORDER BY StopID ASC;"
@@ -250,7 +251,7 @@ Module Module1
             Next n
             Form1.ProgressBar1.Value = RecordCount
             Form1.TextBox2.Text = Format(RecordCount, "N0")
-            Form1.TextBox3.Text = (sw.Elapsed).TotalSeconds.ToString
+            Form1.TextBox3.Text = Format((sw.Elapsed).TotalSeconds, "N1") '.ToString
             sw.Stop()
         Catch ex As Exception
             MsgBox(ex.Message & vbCrLf & "StatusID:" & Record("StatusID").ToString, MsgBoxStyle.Information, "Exception Warning")
