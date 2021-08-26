@@ -153,7 +153,9 @@ Module Module1
                         Form1.TextBox4.Text = TSpan2.ToString
                     End If
                     Form1.Refresh()
+                    'Form1.TextBox2.Refresh()
                 End If
+                Form1.Update()
                 'Assign values from Record columns to Parameters
                 Param100.Value = Record("Stamp")
                 Param101.Value = Record("Comms")
