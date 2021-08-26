@@ -15,10 +15,13 @@ Module Module1
         Dim strReadOrigSQL, strReadStopsSQL, strWriteStatusSQL, strWriteConditionSQL, strWriteStopsSQL As String
         Dim strConnOld, strConnNew, strMsg As String
         Dim NewStatusID, TempStatusID, n, i As Long
+        Dim TSpan1, TSpan2 As TimeSpan
 
         'Define connection strings
-        strConnOld = "Data Source=CT0000141\SQLEXPRESS_RRR;Initial Catalog=ProductionData;Trusted_Connection=Yes;Connection Timeout=15;"
+        'strConnOld = "Data Source=CT0000141\SQLEXPRESS_RRR;Initial Catalog=ProductionData;Trusted_Connection=Yes;Connection Timeout=15;"
+        strConnOld = "Data Source=CTENG02\ENGSQL2014;Initial Catalog=ProductionData;Trusted_Connection=Yes;Connection Timeout=15;"
         strConnNew = "Data Source=CT0000141\SQLEXPRESS_RRR;Initial Catalog=ProductionData;Trusted_Connection=Yes;Connection Timeout=15;"
+        'strConnNew = "Data Source=CTENG01\ENGSQLEXPRESS;Initial Catalog=ProductionData;Trusted_Connection=Yes;Connection Timeout=15;"
 
         'Creates Parameters for database writing
         'Dim Parameter Lists
@@ -75,26 +78,24 @@ Module Module1
 
         'Generate SQL strings
         'Read all rows from Original Status_RST-XVI table
-        'strReadOrigSQL = "SELECT * FROM [Status_RST-XVI] WHERE MachFault = 1 OR OpStop = 1 ORDER BY STAMP ASC;"
-        'strReadOrigSQL = "SELECT top (200000) * FROM [Status_RST-XVI] WHERE StatusID >2000000 ORDER BY STAMP ASC;"
         strReadOrigSQL = "SELECT * FROM [Status_RST-XVI] ORDER BY STAMP ASC;"
         'Read all Stops for a given StatusID
-        strReadStopsSQL = "SELECT * FROM Stops WHERE (StatusID = @OrigStatusID) " _
+        strReadStopsSQL = "SELECT * FROM [Stops] WHERE (StatusID = @OrigStatusID) " _
                 & "ORDER BY StopID ASC;"
         'Append to new Mach_Status table, collecting the newly created Identity value for use in Condition and Stops
-        strWriteStatusSQL = "INSERT INTO [Mach_Status_Working] (Stamp, Comms, WCID, Power, ProdMode, JobNumber, " _
+        strWriteStatusSQL = "INSERT INTO [Mach_Status_RRR] (Stamp, Comms, WCID, Power, ProdMode, JobNumber, " _
                 & "JobQty, CurrQty, Running, MachFault, MachFaultAck, OpStop, Activity, Speed, ElapsedTime) " _
                 & "VALUES (@Stamp, @Comms, @WCID, @Power, @ProdMode, @JobNumber, @JobQty, @CurrQty, " _
                 & "@Running, @MachFault, @MachFaultAck, @OpStop, @Activity, @Speed, @ET); " _
                 & "SELECT SCOPE_IDENTITY();"
         'Append to the new Machine Condition table for the RST-XVI. Only machine in the database now
-        strWriteConditionSQL = "INSERT INTO [EquipCond_RST-XVI] (StatusID, TempMotor, TempGearBox, " _
+        strWriteConditionSQL = "INSERT INTO [EquipCond_RST-XVI_RRR] (StatusID, TempMotor, TempGearBox, " _
                 & "TempFeeder, TempIndexer) " _
                 & "VALUES (@CondStatusID, @TempMotor, @TempGearBox, @TempFeeder, @TempIndexer)" _
                 & "SELECT SCOPE_IDENTITY();"
         'Append to the unified Stops table all existing Stop entries, referencing the new StatusID returned
         'previously from the SCOPE_IDENTITY in strWriteStatusSQL
-        strWriteStopsSQL = "INSERT INTO [Stopsss] (StatusID, MStop, OStop, MStopCode, OStopCode, StopCode) " _
+        strWriteStopsSQL = "INSERT INTO [Stops_RRR] (StatusID, MStop, OStop, MStopCode, OStopCode, StopCode) " _
                 & "VALUES (@StopStatusID, @MStop, @OStop, @MStopCode, @OStopCode, @StopCode)" _
                 & "SELECT SCOPE_IDENTITY();"
 
@@ -135,15 +136,22 @@ Module Module1
             Threading.Thread.Sleep(2000)
             'Start stopwatch for timing purposes
             sw.Start()
+            TSpan1 = TimeSpan.FromSeconds(0)
+
+
             For n = 0 To dbDT_Orig.Rows.Count - 1
                 Record = dbDT_Orig.Rows(n)
                 'Status update handling
                 If n Mod 5 = 0 Then
                     Form1.ProgressBar1.Value = n
-                    'Form1.ProgressBar1.Refresh() 'Update()
-                    Form1.TextBox2.Text = Format(n, "N0")
-                    Form1.TextBox3.Text = Format((sw.Elapsed).TotalSeconds, "N1")
-                    'Form1.TextBox2.Refresh()
+                    Form1.TextBox2.Text = Format(n, "N0") ' Records Processed
+
+                    TSpan1 = TimeSpan.FromSeconds(Int(sw.Elapsed.TotalSeconds))
+                    Form1.TextBox3.Text = TSpan1.ToString   'Elapsed Time
+                    If n > 1000 Then
+                        TSpan2 = TimeSpan.FromSeconds(Int(((RecordCount - n) * sw.Elapsed.TotalSeconds) / n))
+                        Form1.TextBox4.Text = TSpan2.ToString
+                    End If
                     Form1.Refresh()
                 End If
                 'Assign values from Record columns to Parameters
@@ -253,6 +261,7 @@ Module Module1
             Form1.TextBox2.Text = Format(RecordCount, "N0")
             Form1.TextBox3.Text = Format((sw.Elapsed).TotalSeconds, "N1") '.ToString
             sw.Stop()
+            Form1.textbox5.text = Record("StatusID").ToString
         Catch ex As Exception
             MsgBox(ex.Message & vbCrLf & "StatusID:" & Record("StatusID").ToString, MsgBoxStyle.Information, "Exception Warning")
         End Try
@@ -276,4 +285,5 @@ Module Module1
             writer.Close()
         End Using
     End Sub
+
 End Module
