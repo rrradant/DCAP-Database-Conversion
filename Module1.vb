@@ -3,7 +3,7 @@ Imports System.IO
 
 Module Module1
 
-    Sub DoConvert()
+    Sub Main()
         Dim sw As New Stopwatch
         Dim RecordCount, StopsCount As Long
 
@@ -78,7 +78,7 @@ Module Module1
 
         'Generate SQL strings
         'Read all rows from Original Status_RST-XVI table
-        strReadOrigSQL = "SELECT * FROM [Status_RST-XVI] ORDER BY STAMP ASC;"
+        strReadOrigSQL = "SELECT top (102007) * FROM [Status_RST-XVI] ORDER BY STAMP ASC;"
         'Read all Stops for a given StatusID
         strReadStopsSQL = "SELECT * FROM [Stops] WHERE (StatusID = @OrigStatusID) " _
                 & "ORDER BY StopID ASC;"
@@ -130,10 +130,12 @@ Module Module1
             If RecordCount = 0 Then
                 Throw New Exception("Invalid RecordCount from initial dbDT_Orig datatable fill command.")
             End If
-            Form1.TextBox1.Text = Format(RecordCount, "N0")
-            Form1.TextBox1.Refresh()
-            Form1.ProgressBar1.Maximum = RecordCount
-            Threading.Thread.Sleep(2000)
+            '
+            'Form1.TextBox1.Text = Format(RecordCount, "N0")
+            'Form1.TextBox1.Refresh()
+            'Form1.ProgressBar1.Maximum = RecordCount
+
+            Threading.Thread.Sleep(500)
             'Start stopwatch for timing purposes
             sw.Start()
             TSpan1 = TimeSpan.FromSeconds(0)
@@ -142,20 +144,25 @@ Module Module1
             For n = 0 To dbDT_Orig.Rows.Count - 1
                 Record = dbDT_Orig.Rows(n)
                 'Status update handling
-                If n Mod 5 = 0 Then
-                    Form1.ProgressBar1.Value = n
-                    Form1.TextBox2.Text = Format(n, "N0") ' Records Processed
+                If n Mod 25 = 0 Then
+                    'Form1.ProgressBar1.Value = n
+                    'Form1.TextBox2.Text = Format(n, "N0") ' Records Processed
 
                     TSpan1 = TimeSpan.FromSeconds(Int(sw.Elapsed.TotalSeconds))
-                    Form1.TextBox3.Text = TSpan1.ToString   'Elapsed Time
-                    If n > 1000 Then
+                    'Form1.TextBox3.Text = TSpan1.ToString   'Elapsed Time
+                    If n > 500 Then
                         TSpan2 = TimeSpan.FromSeconds(Int(((RecordCount - n) * sw.Elapsed.TotalSeconds) / n))
-                        Form1.TextBox4.Text = TSpan2.ToString
+                        'Form1.TextBox4.Text = TSpan2.ToString
                     End If
-                    Form1.Refresh()
-                    'Form1.TextBox2.Refresh()
+                    'Form1.Refresh()
+                    'Console.Clear()
+                    Console.CursorLeft = 0
+                    Console.CursorTop = 2
+                    Console.WriteLine("Total Records: " & vbTab & Format(RecordCount, "N0")) ' Records
+                    Console.WriteLine("Records Processed: " & Format(n, "N0")) ' Records Processed
+                    Console.WriteLine("Time Elapsed:" & vbTab & TSpan1.ToString) ' Elapsed Time
+                    Console.WriteLine("Time Remaining:" & vbTab & TSpan2.ToString) ' Time Remaining
                 End If
-                Form1.Update()
                 'Assign values from Record columns to Parameters
                 Param100.Value = Record("Stamp")
                 Param101.Value = Record("Comms")
@@ -259,11 +266,26 @@ Module Module1
                 End If
 
             Next n
-            Form1.ProgressBar1.Value = RecordCount
-            Form1.TextBox2.Text = Format(RecordCount, "N0")
-            Form1.TextBox3.Text = Format((sw.Elapsed).TotalSeconds, "N1") '.ToString
+            'Form1.ProgressBar1.Value = RecordCount
+            'Form1.TextBox2.Text = Format(RecordCount, "N0")
+            'Form1.TextBox3.Text = Format((sw.Elapsed).TotalSeconds, "N1") '.ToString
+            'Form1.textbox5.text = Record("StatusID").ToString
+            TSpan1 = TimeSpan.FromSeconds(Int(sw.Elapsed.TotalSeconds))
+
+            TSpan2 = TimeSpan.Zero
             sw.Stop()
-            Form1.textbox5.text = Record("StatusID").ToString
+            Console.CursorLeft = 0
+            Console.CursorTop = 2
+            Console.WriteLine("Total Records: " & vbTab & Format(RecordCount, "N0")) ' Records
+            Console.WriteLine("Records Processed: " & Format(n, "N0")) ' Records Processed
+            Console.WriteLine("Time Elapsed:" & vbTab & TSpan1.ToString) ' Elapsed Time
+            Console.WriteLine("Time Remaining:" & vbTab & TSpan2.ToString) ' Time Remaining
+            Console.WriteLine("Last StatusID processed: " & Record("StatusID").ToString)
+            Threading.Thread.Sleep(1000)
+            Console.WriteLine("Press any key to exit.")
+            MsgBox("Please write this down:" & vbCrLf & "Last StatusID processed was: " & Record("StatusID").ToString, MsgBoxStyle.Information, "This is why you did this!")
+            Console.ReadKey()
+
         Catch ex As Exception
             MsgBox(ex.Message & vbCrLf & "StatusID:" & Record("StatusID").ToString, MsgBoxStyle.Information, "Exception Warning")
         End Try
