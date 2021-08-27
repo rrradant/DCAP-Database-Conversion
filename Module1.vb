@@ -13,8 +13,8 @@ Module Module1
         Dim dbConnOld, dbConnNew As SqlConnection
         Dim Record, StopRow As DataRow
         Dim strReadOrigSQL, strReadStopsSQL, strWriteStatusSQL, strWriteConditionSQL, strWriteStopsSQL As String
-        Dim strConnOld, strConnNew, strMsg As String
-        Dim NewStatusID, TempStatusID, n, i As Long
+        Dim strConnOld, strConnNew, strMsg, strKeyVal As String
+        Dim NewStatusID, TempStatusID, n, i, KeyVal As Long
         Dim TSpan1, TSpan2 As TimeSpan
 
         'Define connection strings
@@ -52,7 +52,6 @@ Module Module1
         SQLStatusParams.Add(Param109) : SQLStatusParams.Add(Param110) : SQLStatusParams.Add(Param111)
         SQLStatusParams.Add(Param112) : SQLStatusParams.Add(Param113) : SQLStatusParams.Add(Param114)
 
-
         'For use in STOPS read query
         Dim Param150 As New SqlParameter("@OrigStatusID", vbNull)
         SQLStopsReadParams.Add(Param150)
@@ -76,9 +75,28 @@ Module Module1
         SQLStopsParams.Add(Param300) : SQLStopsParams.Add(Param301) : SQLStopsParams.Add(Param302)
         SQLStopsParams.Add(Param303) : SQLStopsParams.Add(Param304) : SQLStopsParams.Add(Param305)
 
+        'Get Startup StatusID value from keyboard
+        Console.WriteLine("Enter the last read StatusID. Enter 0 if starting over.")
+        Console.Write("Enter StatusID value here: ")
+        strKeyVal = Console.ReadLine()
+        If IsNumeric(strKeyVal) Then
+            KeyVal = CInt(strKeyVal)
+            If KeyVal >= 0 Then
+                If MsgBox("Entered value is: " & KeyVal.ToString & vbCrLf & "Do you want to proceed?", MsgBoxStyle.YesNo) = vbNo Then
+                    End
+                End If
+            Else
+                MsgBox("Value must be positive.", MsgBoxStyle.Critical, "Data Entry Validation")
+                End
+            End If
+        Else
+            MsgBox("Value Is Not numeric.", MsgBoxStyle.Critical, "Data Entry Validation")
+            End
+        End If
+
         'Generate SQL strings
         'Read all rows from Original Status_RST-XVI table
-        strReadOrigSQL = "SELECT top (102007) * FROM [Status_RST-XVI] ORDER BY STAMP ASC;"
+        strReadOrigSQL = "SELECT * FROM [Status_RST-XVI] Where (StatusID > " & KeyVal.ToString & ") ORDER BY STAMP ASC;"
         'Read all Stops for a given StatusID
         strReadStopsSQL = "SELECT * FROM [Stops] WHERE (StatusID = @OrigStatusID) " _
                 & "ORDER BY StopID ASC;"
@@ -117,7 +135,7 @@ Module Module1
         SQLCondParams.ForEach(Sub(p) dbCmdWCond.Parameters.Add(p))
         SQLStopsParams.ForEach(Sub(p) dbCmdWStop.Parameters.Add(p))
         SQLStopsReadParams.ForEach(Sub(p) dbCmdRStops.Parameters.Add(p))
-
+        Console.WriteLine("Preparing Queries...")
         Try
             'Prepares objects for Stops processing later on
             dbDT_Stops = New DataTable
@@ -135,6 +153,8 @@ Module Module1
             'Form1.TextBox1.Refresh()
             'Form1.ProgressBar1.Maximum = RecordCount
 
+            Console.Clear()
+            Console.WriteLine("Current Status")
             Threading.Thread.Sleep(500)
             'Start stopwatch for timing purposes
             sw.Start()
@@ -144,13 +164,13 @@ Module Module1
             For n = 0 To dbDT_Orig.Rows.Count - 1
                 Record = dbDT_Orig.Rows(n)
                 'Status update handling
-                If n Mod 25 = 0 Then
+                If n Mod 1000 = 0 Then
                     'Form1.ProgressBar1.Value = n
                     'Form1.TextBox2.Text = Format(n, "N0") ' Records Processed
 
                     TSpan1 = TimeSpan.FromSeconds(Int(sw.Elapsed.TotalSeconds))
                     'Form1.TextBox3.Text = TSpan1.ToString   'Elapsed Time
-                    If n > 500 Then
+                    If n > 10000 Then
                         TSpan2 = TimeSpan.FromSeconds(Int(((RecordCount - n) * sw.Elapsed.TotalSeconds) / n))
                         'Form1.TextBox4.Text = TSpan2.ToString
                     End If
@@ -158,8 +178,8 @@ Module Module1
                     'Console.Clear()
                     Console.CursorLeft = 0
                     Console.CursorTop = 2
-                    Console.WriteLine("Total Records: " & vbTab & Format(RecordCount, "N0")) ' Records
-                    Console.WriteLine("Records Processed: " & Format(n, "N0")) ' Records Processed
+                    Console.WriteLine("Total Active Records: " & Format(RecordCount, "N0")) ' Records
+                    Console.WriteLine("Records Processed:    " & Format(n, "N0")) ' Records Processed
                     Console.WriteLine("Time Elapsed:" & vbTab & TSpan1.ToString) ' Elapsed Time
                     Console.WriteLine("Time Remaining:" & vbTab & TSpan2.ToString) ' Time Remaining
                 End If
@@ -276,8 +296,8 @@ Module Module1
             sw.Stop()
             Console.CursorLeft = 0
             Console.CursorTop = 2
-            Console.WriteLine("Total Records: " & vbTab & Format(RecordCount, "N0")) ' Records
-            Console.WriteLine("Records Processed: " & Format(n, "N0")) ' Records Processed
+            Console.WriteLine("Total Active Records: " & Format(RecordCount, "N0")) ' Records
+            Console.WriteLine("Records Processed:    " & Format(n, "N0")) ' Records Processed
             Console.WriteLine("Time Elapsed:" & vbTab & TSpan1.ToString) ' Elapsed Time
             Console.WriteLine("Time Remaining:" & vbTab & TSpan2.ToString) ' Time Remaining
             Console.WriteLine("Last StatusID processed: " & Record("StatusID").ToString)
@@ -287,9 +307,10 @@ Module Module1
             Console.ReadKey()
 
         Catch ex As Exception
-            MsgBox(ex.Message & vbCrLf & "StatusID:" & Record("StatusID").ToString, MsgBoxStyle.Information, "Exception Warning")
-        End Try
+            MsgBox(ex.Message & vbCrLf & "StatusID:" & Record("StatusID").ToString, MsgBoxStyle.OkOnly, "Exception Warning")
 
+        End Try
+        Threading.Thread.Sleep(5000)
     End Sub
 
     Sub Write2Log(message As String)
