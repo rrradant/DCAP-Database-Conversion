@@ -19,9 +19,12 @@ Module Module1
 
         'Define connection strings
         'strConnOld = "Data Source=CT0000141\SQLEXPRESS_RRR;Initial Catalog=ProductionData;Trusted_Connection=Yes;Connection Timeout=15;"
-        strConnOld = "Data Source=CTENG02\ENGSQL2014;Initial Catalog=ProductionData;Trusted_Connection=Yes;Connection Timeout=15;"
-        strConnNew = "Data Source=CT0000141\SQLEXPRESS_RRR;Initial Catalog=ProductionData;Trusted_Connection=Yes;Connection Timeout=15;"
-        'strConnNew = "Data Source=CTENG01\ENGSQLEXPRESS;Initial Catalog=ProductionData;Trusted_Connection=Yes;Connection Timeout=15;"
+        'strConnOld = "Data Source=CTENG02\ENGSQL2014;Initial Catalog=ProductionData;Trusted_Connection=Yes;Connection Timeout=30;"
+        strConnOld = "Data Source=CT0000141\SQLEXPRESS_RRR;Initial Catalog=ProductionData;Trusted_Connection=Yes;Connection Timeout=30;"
+
+        'strConnNew = "Data Source=CT0000141\SQLEXPRESS_RRR;Initial Catalog=ProductionData;Trusted_Connection=Yes;Connection Timeout=30;"
+        'strConnNew = "Data Source=CTENG02\ENGSQL2017;Initial Catalog=DCAP_Data;Trusted_Connection=Yes;Connection Timeout=30;"
+        strConnNew = "Data Source=CT0000141\SQLEXPRESS_RRR;Initial Catalog=DCAP_Data;Trusted_Connection=Yes;Connection Timeout=30;"
 
         'Creates Parameters for database writing
         'Dim Parameter Lists
@@ -86,7 +89,7 @@ Module Module1
                     End
                 End If
             Else
-                MsgBox("Value must be positive.", MsgBoxStyle.Critical, "Data Entry Validation")
+                MsgBox("Value must be positive or zero, loser.", MsgBoxStyle.Critical, "Data Entry Validation")
                 End
             End If
         Else
@@ -96,24 +99,24 @@ Module Module1
 
         'Generate SQL strings
         'Read all rows from Original Status_RST-XVI table
-        strReadOrigSQL = "SELECT * FROM [Status_RST-XVI] Where (StatusID > " & KeyVal.ToString & ") ORDER BY STAMP ASC;"
+        strReadOrigSQL = "SELECT * FROM [Status_RST-XVI] Where (Stamp >= CONVERT(DATETIME, '2019-04-01 00:00:00', 102)) AND (StatusID > " & KeyVal.ToString & ") ORDER BY STAMP ASC;"
         'Read all Stops for a given StatusID
         strReadStopsSQL = "SELECT * FROM [Stops] WHERE (StatusID = @OrigStatusID) " _
                 & "ORDER BY StopID ASC;"
         'Append to new Mach_Status table, collecting the newly created Identity value for use in Condition and Stops
-        strWriteStatusSQL = "INSERT INTO [Mach_Status_RRR] (Stamp, Comms, WCID, Power, ProdMode, JobNumber, " _
+        strWriteStatusSQL = "INSERT INTO [Machine_Status] (Stamp, Comms, WCID, Power, ProdMode, JobNumber, " _
                 & "JobQty, CurrQty, Running, MachFault, MachFaultAck, OpStop, Activity, Speed, ElapsedTime) " _
                 & "VALUES (@Stamp, @Comms, @WCID, @Power, @ProdMode, @JobNumber, @JobQty, @CurrQty, " _
                 & "@Running, @MachFault, @MachFaultAck, @OpStop, @Activity, @Speed, @ET); " _
                 & "SELECT SCOPE_IDENTITY();"
         'Append to the new Machine Condition table for the RST-XVI. Only machine in the database now
-        strWriteConditionSQL = "INSERT INTO [EquipCond_RST-XVI_RRR] (StatusID, TempMotor, TempGearBox, " _
+        strWriteConditionSQL = "INSERT INTO [EquipCond_RST-XVI] (StatusID, TempMotor, TempGearBox, " _
                 & "TempFeeder, TempIndexer) " _
                 & "VALUES (@CondStatusID, @TempMotor, @TempGearBox, @TempFeeder, @TempIndexer)" _
                 & "SELECT SCOPE_IDENTITY();"
         'Append to the unified Stops table all existing Stop entries, referencing the new StatusID returned
         'previously from the SCOPE_IDENTITY in strWriteStatusSQL
-        strWriteStopsSQL = "INSERT INTO [Stops_RRR] (StatusID, MStop, OStop, MStopCode, OStopCode, StopCode) " _
+        strWriteStopsSQL = "INSERT INTO [Stops] (StatusID, MStop, OStop, MStopCode, OStopCode, StopCode) " _
                 & "VALUES (@StopStatusID, @MStop, @OStop, @MStopCode, @OStopCode, @StopCode)" _
                 & "SELECT SCOPE_IDENTITY();"
 
@@ -128,7 +131,7 @@ Module Module1
         dbCmdWStat = New SqlCommand(strWriteStatusSQL, dbConnNew)
         dbCmdWCond = New SqlCommand(strWriteConditionSQL, dbConnNew)
         dbCmdWStop = New SqlCommand(strWriteStopsSQL, dbConnNew)
-        dbCmdRStops = New SqlCommand(strReadStopsSQL, dbConnNew)
+        dbCmdRStops = New SqlCommand(strReadStopsSQL, dbConnOld)
 
         'Assign Parameters to the Command Objects
         SQLStatusParams.ForEach(Sub(p) dbCmdWStat.Parameters.Add(p))
@@ -164,13 +167,13 @@ Module Module1
             For n = 0 To dbDT_Orig.Rows.Count - 1
                 Record = dbDT_Orig.Rows(n)
                 'Status update handling
-                If n Mod 1000 = 0 Then
+                If n Mod 10 = 0 Then
                     'Form1.ProgressBar1.Value = n
                     'Form1.TextBox2.Text = Format(n, "N0") ' Records Processed
 
                     TSpan1 = TimeSpan.FromSeconds(Int(sw.Elapsed.TotalSeconds))
                     'Form1.TextBox3.Text = TSpan1.ToString   'Elapsed Time
-                    If n > 10000 Then
+                    If n > 100 Then
                         TSpan2 = TimeSpan.FromSeconds(Int(((RecordCount - n) * sw.Elapsed.TotalSeconds) / n))
                         'Form1.TextBox4.Text = TSpan2.ToString
                     End If
