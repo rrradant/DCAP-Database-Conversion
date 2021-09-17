@@ -7,7 +7,7 @@ Module Module1
         Dim sw As New Stopwatch
         Dim RecordCount, StopsCount As Long
 
-        Dim dbDT_Orig, dbDT_Stops As DataTable
+        Dim dbDT_Orig, dbDT_Stops, dbDT_FilteredStops As DataTable
         Dim dbDA_Orig, dbDA_Stops As SqlDataAdapter
         Dim dbCmdRead, dbCmdRStops, dbCmdWStat, dbCmdWCond, dbCmdWStop As SqlCommand
         Dim dbConnOld, dbConnNew As SqlConnection
@@ -16,6 +16,8 @@ Module Module1
         Dim strConnOld, strConnNew, strMsg, strKeyVal As String
         Dim NewStatusID, TempStatusID, n, i, KeyVal As Long
         Dim TSpan1, TSpan2 As TimeSpan
+
+        Dim rows() As System.Data.DataRow
 
         'Define connection strings
         'strConnOld = "Data Source=CT0000141\SQLEXPRESS_RRR;Initial Catalog=ProductionData;Trusted_Connection=Yes;Connection Timeout=15;"
@@ -99,10 +101,10 @@ Module Module1
 
         'Generate SQL strings
         'Read all rows from Original Status_RST-XVI table
-        strReadOrigSQL = "SELECT * FROM [Status_RST-XVI] Where (Stamp >= CONVERT(DATETIME, '2019-04-01 00:00:00', 102)) AND (StatusID > " & KeyVal.ToString & ") ORDER BY STAMP ASC;"
+        strReadOrigSQL = "SELECT top(100000) * FROM [Status_RST-XVI] Where (Stamp >= CONVERT(DATETIME, '2019-04-01 00:00:00', 102)) AND (StatusID > " & KeyVal.ToString & ") ORDER BY STAMP ASC;"
         'Read all Stops for a given StatusID
-        strReadStopsSQL = "SELECT * FROM [Stops] WHERE (StatusID = @OrigStatusID) " _
-                & "ORDER BY StopID ASC;"
+        strReadStopsSQL = "SELECT * FROM [Stops] WHERE (StatusID = @OrigStatusID) " ' _
+        '& "ORDER BY StopID ASC;"
         'Append to new Mach_Status table, collecting the newly created Identity value for use in Condition and Stops
         strWriteStatusSQL = "INSERT INTO [Machine_Status] (Stamp, Comms, WCID, Power, ProdMode, JobNumber, " _
                 & "JobQty, CurrQty, Running, MachFault, MachFaultAck, OpStop, Activity, Speed, ElapsedTime) " _
@@ -151,10 +153,6 @@ Module Module1
             If RecordCount = 0 Then
                 Throw New Exception("Invalid RecordCount from initial dbDT_Orig datatable fill command.")
             End If
-            '
-            'Form1.TextBox1.Text = Format(RecordCount, "N0")
-            'Form1.TextBox1.Refresh()
-            'Form1.ProgressBar1.Maximum = RecordCount
 
             Console.Clear()
             Console.WriteLine("Current Status")
@@ -238,7 +236,7 @@ Module Module1
                 'If MachStop or OpStop are true, then a cooresponding record must be added to the [Stops] table
                 If Record("MachFault") = True Or Record("OpStop") = True Then
                     Param150.Value = Record("StatusID")
-                    dbDT_Stops.Clear()
+                    'dbDT_Stops.Clear()
                     strMsg = ""
                     StopsCount = 0
                     StopsCount = dbDA_Stops.Fill(dbDT_Stops)
@@ -259,7 +257,8 @@ Module Module1
                             Param305.Value = 0  'Unified Stop Code
                             'Write to Stops table now
                             TempStatusID = 0
-                            TempStatusID = dbCmdWStop.ExecuteScalar()
+                            'TempStatusID = dbCmdWStop.ExecuteScalar()
+                            TempStatusID = dbCmdWStop.ExecuteNonQuery
                             If TempStatusID = 0 Then
                                 Throw New Exception("Invalid return of TempStatusID after dbCmdWCond.ExecuteScalar() writing new Stop fields.")
                             End If
@@ -276,16 +275,16 @@ Module Module1
                             Else
                                 Param305.Value = StopRow("OStopCode") 'Unified Code
                             End If
-
                             'Write to Stops table now
                             TempStatusID = 0
                             TempStatusID = dbCmdWStop.ExecuteScalar()
                             If TempStatusID = 0 Then
-                                Throw New Exception("Invalid return of TempStatusID after dbCmdWCond.ExecuteScalar() writing new Stop fields.")
+                                'Throw New Exception("Invalid return of TempStatusID after dbCmdWCond.ExecuteScalar() writing new Stop fields.")
                             End If
+
                         Next i
                     End If
-
+                    Debug.WriteLine(vbCrLf)
                 End If
 
             Next n
@@ -304,7 +303,7 @@ Module Module1
             Console.WriteLine("Time Elapsed:" & vbTab & TSpan1.ToString) ' Elapsed Time
             Console.WriteLine("Time Remaining:" & vbTab & TSpan2.ToString) ' Time Remaining
             Console.WriteLine("Last StatusID processed: " & Record("StatusID").ToString)
-            Threading.Thread.Sleep(1000)
+            'Threading.Thread.Sleep(1000)
             Console.WriteLine("Press any key to exit.")
             MsgBox("Please write this down:" & vbCrLf & "Last StatusID processed was: " & Record("StatusID").ToString, MsgBoxStyle.Information, "This is why you did this!")
             Console.ReadKey()
@@ -313,7 +312,7 @@ Module Module1
             MsgBox(ex.Message & vbCrLf & "StatusID:" & Record("StatusID").ToString, MsgBoxStyle.OkOnly, "Exception Warning")
 
         End Try
-        Threading.Thread.Sleep(5000)
+        'Threading.Thread.Sleep(500)
     End Sub
 
     Sub Write2Log(message As String)
