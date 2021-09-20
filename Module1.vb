@@ -28,7 +28,7 @@ Module Module1
 
         'Generate SQL strings
         'Get list of StatusID's to process
-        strGetStatIDListSQL = "SELECT top(500) * FROM [StatusIDList] WHERE (StatusID >=95502) AND (Converted = 0);"
+        strGetStatIDListSQL = "SELECT * FROM [StatusIDList] WHERE (StatusID >=95502) AND (Converted = 0);"
 
         'Manage SQL Connections
         dbConnOld = New SqlConnection(strConnOld)
@@ -401,7 +401,7 @@ Module Module1
             dbDA_IDs.Dispose()
             dbConnOld.Close()
             dbConnNew.Close()
-            n = n + 1
+
         Catch ex As Exception
             MsgBox(ex.Message)
         End Try
