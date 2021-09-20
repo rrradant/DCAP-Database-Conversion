@@ -1,5 +1,6 @@
 ﻿Imports System.Data.SqlClient
 Imports System.IO
+Imports System.Threading
 
 Module Module1
 
@@ -14,7 +15,7 @@ Module Module1
 
         Dim strGetStatIDListSQL As String
         Dim strConnOld As String
-        Dim n, incMod As Long
+        Dim n, incMod, intID As Long
         Dim TSpan1, TSpan2 As TimeSpan
 
         'Define connection strings
@@ -25,7 +26,7 @@ Module Module1
 
         'Generate SQL strings
         'Get list of StatusID's to process
-        strGetStatIDListSQL = "SELECT top(37) * FROM [StatusIDList] WHERE (StatusID >=95502) AND (Converted = 0);"
+        strGetStatIDListSQL = "SELECT top(100) * FROM [StatusIDList] WHERE (StatusID >=95502) AND (Converted = 0);"
 
         'Manage SQL Connections
         dbConnOld = New SqlConnection(strConnOld)
@@ -59,7 +60,10 @@ Module Module1
             incMod = 10
 
             For Each row In dbDT_IDs.Rows
-                Call ConvertStatus(row("StatusID"))
+                'Call ConvertStatus(row("StatusID"))
+                intID = row("StatusID")
+                'Call ConvertStatus(intID)
+                ThreadPool.QueueUserWorkItem(AddressOf ConvertStatus, intID)
                 n = n + 1
                 If n Mod incMod = 0 Then
                     TSpan1 = TimeSpan.FromSeconds(Int(sw.Elapsed.TotalSeconds))
