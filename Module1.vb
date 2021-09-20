@@ -7,6 +7,8 @@ Module Module1
     Sub Main()
         Dim sw As New Stopwatch
         Dim RecordCount As Long
+        Dim booQ As Boolean
+        Dim Wthd, Pthd As Integer
 
         Dim dbDT_IDs As DataTable
         Dim dbDA_IDs As SqlDataAdapter
@@ -26,11 +28,13 @@ Module Module1
 
         'Generate SQL strings
         'Get list of StatusID's to process
-        strGetStatIDListSQL = "SELECT top(100) * FROM [StatusIDList] WHERE (StatusID >=95502) AND (Converted = 0);"
+        strGetStatIDListSQL = "SELECT top(1000) * FROM [StatusIDList] WHERE (StatusID >=95502) AND (Converted = 0);"
 
         'Manage SQL Connections
         dbConnOld = New SqlConnection(strConnOld)
         dbConnOld.Open()
+        'Console.WriteLine("State: {0}", dbConnOld.State)
+        'Console.WriteLine("ConnectionTimeout: {0}", dbConnOld.ConnectionTimeout)
 
         'Assign SQLCommand Objects their CommandText and Connection information
         dbCmdRIDList = New SqlCommand(strGetStatIDListSQL, dbConnOld)
@@ -39,6 +43,10 @@ Module Module1
             'Start by opening the list of StatusID's that have not been converted
             dbDT_IDs = New DataTable
             dbDA_IDs = New SqlDataAdapter(dbCmdRIDList)
+            'Console.WriteLine("ConnectionTimeout: {0}", dbDA_IDs.SelectCommand.CommandTimeout)
+            'dbDA_IDs.SelectCommand.CommandTimeout = 0
+            'Console.WriteLine("ConnectionTimeout: {0}", dbDA_IDs.SelectCommand.CommandTimeout)
+
             RecordCount = dbDA_IDs.Fill(dbDT_IDs)
 
             If RecordCount = 0 Then
@@ -58,12 +66,30 @@ Module Module1
 
             'Setting for reporting interval
             incMod = 10
+            'ThreadPool.GetAvailableThreads(Wthd, Pthd)
+            'MsgBox("Worker: " & Wthd.ToString)
+            'MsgBox("Port: " & Pthd.ToString)
+
+            'ThreadPool.SetMaxThreads(8, 3)
+
+            'ThreadPool.GetAvailableThreads(Wthd, Pthd)
+            'MsgBox("Worker: " & Wthd.ToString)
+            'MsgBox("Port: " & Pthd.ToString)
 
             For Each row In dbDT_IDs.Rows
                 'Call ConvertStatus(row("StatusID"))
                 intID = row("StatusID")
                 'Call ConvertStatus(intID)
-                ThreadPool.QueueUserWorkItem(AddressOf ConvertStatus, intID)
+                Do
+                    booQ = ThreadPool.QueueUserWorkItem(AddressOf ConvertStatus, intID)
+                    'ThreadPool.QueueUserWorkItem(AddressOf ConvertStatus, intID)
+                    If booQ = False Then
+                        Beep()
+                        Threading.Thread.Sleep(1000)
+                    End If
+                Loop Until booQ = True
+                Threading.Thread.Sleep(50)
+
                 n = n + 1
                 If n Mod incMod = 0 Then
                     TSpan1 = TimeSpan.FromSeconds(Int(sw.Elapsed.TotalSeconds))
@@ -77,6 +103,7 @@ Module Module1
                     Console.WriteLine("Time Remaining:" & vbTab & TSpan2.ToString) ' Time Remaining
                 End If
             Next
+
             sw.Stop()
             TSpan2 = TimeSpan.Zero
             Console.CursorLeft = 0
@@ -111,12 +138,12 @@ Module Module1
         'Define connection strings
         'strConnOld = "Data Source=CT0000141\SQLEXPRESS_RRR;Initial Catalog=ProductionData;Trusted_Connection=Yes;Connection Timeout=15;"
         'strConnOld = "Data Source=CTENG02\ENGSQL2014;Initial Catalog=ProductionData;Trusted_Connection=Yes;Connection Timeout=30;"
-        strConnOld = "Data Source=CT0000141\SQLEXPRESS_RRR;Initial Catalog=ProductionData;Trusted_Connection=Yes;Connection Timeout=30;"
+        strConnOld = "Data Source=CT0000141\SQLEXPRESS_RRR;Initial Catalog=ProductionData;Trusted_Connection=Yes;Connection Timeout=0;"
         'strConnOld = "Data Source=RUSSELLDESKTOP\SQLEXPRESS;Initial Catalog=ProductionData;Trusted_Connection=Yes;Connection Timeout=30;"
 
         'strConnNew = "Data Source=CT0000141\SQLEXPRESS_RRR;Initial Catalog=ProductionData;Trusted_Connection=Yes;Connection Timeout=30;"
         'strConnNew = "Data Source=CTENG02\ENGSQL2017;Initial Catalog=DCAP_Data;Trusted_Connection=Yes;Connection Timeout=30;"
-        strConnNew = "Data Source=CT0000141\SQLEXPRESS_RRR;Initial Catalog=DCAP_Data;Trusted_Connection=Yes;Connection Timeout=30;"
+        strConnNew = "Data Source=CT0000141\SQLEXPRESS_RRR;Initial Catalog=DCAP_Data;Trusted_Connection=Yes;Connection Timeout=0;"
         'strConnNew = "Data Source=RUSSELLDESKTOP\SQLEXPRESS;Initial Catalog=DCAP_Data;Trusted_Connection=Yes;Connection Timeout=30;"
 
         'Creates Parameters for database writing
@@ -208,11 +235,17 @@ Module Module1
 
         'Assign SQLCommand Objects their CommandText and Connection information
         dbCmdRead = New SqlCommand(strReadOrigSQL, dbConnOld)
+        dbCmdRead.CommandTimeout = 0
         dbCmdWStat = New SqlCommand(strWriteStatusSQL, dbConnNew)
+        dbCmdWStat.CommandTimeout = 0
         dbCmdWCond = New SqlCommand(strWriteConditionSQL, dbConnNew)
+        dbCmdWCond.CommandTimeout = 0
         dbCmdWStop = New SqlCommand(strWriteStopsSQL, dbConnNew)
+        dbCmdWStop.CommandTimeout = 0
         dbCmdRStops = New SqlCommand(strReadStopsSQL, dbConnOld)
+        dbCmdRStops.CommandTimeout = 0
         dbCmdWIDList = New SqlCommand(strWriteStatusIDConverted, dbConnOld)
+        dbCmdWIDList.CommandTimeout = 0
 
         'Assign Parameters to the Command Objects
         ' SQLStatusParams.ForEach(Sub(p) dbCmdRead.Parameters.Add(p))
