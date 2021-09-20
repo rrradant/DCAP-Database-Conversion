@@ -3,12 +3,12 @@ Imports System.IO
 Imports System.Threading
 
 Module Module1
-
+    Public n As Long
     Sub Main()
         Dim sw As New Stopwatch
         Dim RecordCount As Long
         Dim booQ As Boolean
-        Dim Wthd, Pthd As Integer
+        Dim MaxThd, MaxIO, AvailThd, AvailIO As Integer
 
         Dim dbDT_IDs As DataTable
         Dim dbDA_IDs As SqlDataAdapter
@@ -17,7 +17,7 @@ Module Module1
 
         Dim strGetStatIDListSQL As String
         Dim strConnOld As String
-        Dim n, incMod, intID As Long
+        Dim incMod, intID As Long
         Dim TSpan1, TSpan2 As TimeSpan
 
         'Define connection strings
@@ -28,7 +28,7 @@ Module Module1
 
         'Generate SQL strings
         'Get list of StatusID's to process
-        strGetStatIDListSQL = "SELECT top(1000) * FROM [StatusIDList] WHERE (StatusID >=95502) AND (Converted = 0);"
+        strGetStatIDListSQL = "SELECT top(500) * FROM [StatusIDList] WHERE (StatusID >=95502) AND (Converted = 0);"
 
         'Manage SQL Connections
         dbConnOld = New SqlConnection(strConnOld)
@@ -72,25 +72,27 @@ Module Module1
 
             'ThreadPool.SetMaxThreads(8, 3)
 
-            'ThreadPool.GetAvailableThreads(Wthd, Pthd)
+            ThreadPool.GetMaxThreads(MaxThd, MaxIO)
             'MsgBox("Worker: " & Wthd.ToString)
             'MsgBox("Port: " & Pthd.ToString)
-
+            n = 0
             For Each row In dbDT_IDs.Rows
                 'Call ConvertStatus(row("StatusID"))
                 intID = row("StatusID")
                 'Call ConvertStatus(intID)
-                Do
-                    booQ = ThreadPool.QueueUserWorkItem(AddressOf ConvertStatus, intID)
-                    'ThreadPool.QueueUserWorkItem(AddressOf ConvertStatus, intID)
-                    If booQ = False Then
-                        Beep()
-                        Threading.Thread.Sleep(1000)
-                    End If
-                Loop Until booQ = True
-                Threading.Thread.Sleep(50)
+                'Do
+                'booQ = ThreadPool.QueueUserWorkItem(AddressOf ConvertStatus, intID)
+                ThreadPool.QueueUserWorkItem(AddressOf ConvertStatus, intID)
+                'ThreadPool.GetAvailableThreads(AvailThd, AvailIO)
+                'If MaxThd - AvailThd <= 500 Then
+                'Threading.Thread.Sleep(1000)
+                'End If
+                'Loop Until booQ = True
+                'Threading.Thread.Sleep(25)
+            Next
 
-                n = n + 1
+            Do
+                'n = n + 1
                 If n Mod incMod = 0 Then
                     TSpan1 = TimeSpan.FromSeconds(Int(sw.Elapsed.TotalSeconds))
                     If n > incMod Then
@@ -102,7 +104,22 @@ Module Module1
                     Console.WriteLine("Time Elapsed:" & vbTab & TSpan1.ToString) ' Elapsed Time
                     Console.WriteLine("Time Remaining:" & vbTab & TSpan2.ToString) ' Time Remaining
                 End If
-            Next
+
+
+
+                'Do
+                Console.CursorLeft = 5
+                Console.CursorTop = 10
+                Console.WriteLine("Max Threads: " & MaxThd.ToString & ", " & MaxIO.ToString)
+                ThreadPool.GetAvailableThreads(AvailThd, AvailIO)
+                Console.CursorLeft = 5
+                Console.CursorTop = 11
+                Console.WriteLine("Avail Threads: " & AvailThd.ToString & ", " & AvailIO.ToString)
+                Console.CursorLeft = 5
+                Console.CursorTop = 12
+                Console.WriteLine("Used Threads: " & (MaxThd - AvailThd).ToString & ", " & (MaxIO - AvailIO).ToString)
+                Thread.Sleep(100)
+            Loop
 
             sw.Stop()
             TSpan2 = TimeSpan.Zero
@@ -384,6 +401,7 @@ Module Module1
             dbDA_IDs.Dispose()
             dbConnOld.Close()
             dbConnNew.Close()
+            n = n + 1
         Catch ex As Exception
             MsgBox(ex.Message)
         End Try
