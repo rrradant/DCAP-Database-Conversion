@@ -54,7 +54,7 @@ Module Module1
 
         'Generate SQL strings
         'Read all rows from Original Status_RST-XVI table
-        strReadOrigSQL = "SELECT top(1000) * FROM [Status_RST-XVI] Where (Stamp >= CONVERT(DATETIME, '2019-04-01 00:00:00', 102)) AND (StatusID > " & KeyVal.ToString & ") ORDER BY STAMP ASC;"
+        strReadOrigSQL = "SELECT * FROM [Status_RST-XVI] Where (Stamp >= CONVERT(DATETIME, '2019-04-01 00:00:00', 102)) AND (StatusID > " & KeyVal.ToString & ") ORDER BY STAMP ASC;"
         'Read all Stops for a given StatusID
         'strReadStopsSQL = "SELECT * FROM [Stops] WHERE (StatusID = @OrigStatusID) "
         'Read all original stops
@@ -161,7 +161,8 @@ Module Module1
 
         Next
 
-        Using bulkCopy As SqlBulkCopy = New SqlBulkCopy(dbConnNew)
+        'Using bulkCopy As SqlBulkCopy = New SqlBulkCopy(dbConnNew)
+        Using bulkCopy As SqlBulkCopy = New SqlBulkCopy(strConnNew, SqlBulkCopyOptions.KeepIdentity)
             bulkCopy.DestinationTableName = "dbo.[Machine_Status]"
             Try
                 bulkCopy.WriteToServer(tblNewStatus)
@@ -170,7 +171,6 @@ Module Module1
             End Try
 
             bulkCopy.DestinationTableName = "dbo.[EquipCond_RST-XVI]"
-            bulkCopy.WriteToServer(tblNewXVICond)
             Try
                 bulkCopy.WriteToServer(tblNewXVICond)
             Catch ex As Exception
@@ -317,7 +317,7 @@ Module Module1
             ECID.DataType = System.Type.GetType("System.Int64")
             ECID.ColumnName = "ECID"
             ECID.AutoIncrement = True
-            ECID.AutoIncrementSeed = 69000
+            ECID.AutoIncrementSeed = 1
             ECID.AutoIncrementStep = 1
             tblNewXVICond.Columns.Add(ECID)
 
