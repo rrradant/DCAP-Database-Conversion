@@ -3,6 +3,9 @@ Imports System.IO
 Imports System.Threading
 
 Module Module1
+    Public tblNewStatus As DataTable
+    Public tblNewXVICond As DataTable
+    Public tblNewStops As DataTable
 
     Sub Main()
         Dim sw As New Stopwatch
@@ -17,6 +20,9 @@ Module Module1
         Dim strConnOld, strConnNew, strMsg, strKeyVal As String
         Dim NewStatusID, TempStatusID, n, i, KeyVal As Long
         Dim TSpan1, TSpan2 As TimeSpan
+
+
+        Call DoAll()
 
         'Define connection strings
         'strConnOld = "Data Source=CT0000141\SQLEXPRESS_RRR;Initial Catalog=ProductionData;Trusted_Connection=Yes;Connection Timeout=15;"
@@ -751,144 +757,466 @@ Module Module1
         End Using
     End Sub
 
-    Public Function MakeStatusTable() As DataTable
+    Sub DoAll()
+        Dim sw As New Stopwatch
+        Dim RecordCount, StopsCount As Long
+
+        Dim dbDT_Orig, dbDT_Stops, dbDT_FilteredStops As DataTable
+        Dim dbDA_Orig, dbDA_Stops As SqlDataAdapter
+        Dim dbCmdRead, dbCmdRStops, dbCmdWStat, dbCmdWCond, dbCmdWStop, dbCmdWIDList As SqlCommand
+        Dim dbConnOld, dbConnNew As SqlConnection
+        Dim Record, StopRow As DataRow
+        Dim strReadOrigSQL, strReadStopsSQL, strWriteStatusSQL, strWriteConditionSQL, strWriteStopsSQL, strWriteStatusIDConverted As String
+        Dim strConnOld, strConnNew, strMsg, strKeyVal As String
+        Dim NewStatusID, TempStatusID, n, i, KeyVal As Long
+        Dim TSpan1, TSpan2 As TimeSpan
+
+        'Define connection strings
+        'strConnOld = "Data Source=CT0000141\SQLEXPRESS_RRR;Initial Catalog=ProductionData;Trusted_Connection=Yes;Connection Timeout=15;"
+        'strConnOld = "Data Source=CTENG02\ENGSQL2014;Initial Catalog=ProductionData;Trusted_Connection=Yes;Connection Timeout=30;"
+        strConnOld = "Data Source=CT0000141\SQLEXPRESS_RRR;Initial Catalog=ProductionData;Trusted_Connection=Yes;Connection Timeout=30;"
+        'strConnOld = "Data Source=RUSSELLDESKTOP\SQLEXPRESS;Initial Catalog=ProductionData;Trusted_Connection=Yes;Connection Timeout=30;"
+
+        'strConnNew = "Data Source=CT0000141\SQLEXPRESS_RRR;Initial Catalog=ProductionData;Trusted_Connection=Yes;Connection Timeout=30;"
+        'strConnNew = "Data Source=CTENG02\ENGSQL2017;Initial Catalog=DCAP_Data;Trusted_Connection=Yes;Connection Timeout=30;"
+        strConnNew = "Data Source=CT0000141\SQLEXPRESS_RRR;Initial Catalog=DCAP_Data;Trusted_Connection=Yes;Connection Timeout=30;"
+        'strConnNew = "Data Source=RUSSELLDESKTOP\SQLEXPRESS;Initial Catalog=DCAP_Data;Trusted_Connection=Yes;Connection Timeout=30;"
+
+        'Creates Parameters for database writing
+        'Dim Parameter Lists
+        Dim SQLStatusParams As New List(Of SqlParameter)
+        Dim SQLStopsReadParams As New List(Of SqlParameter)
+        Dim SQLStopsParams As New List(Of SqlParameter)
+        Dim SQLCondParams As New List(Of SqlParameter)
+
+        'Status Values
+        Dim Param100 As New SqlParameter("@Stamp", vbNull)
+        Dim Param101 As New SqlParameter("@Comms", False)
+        Dim Param102 As New SqlParameter("@WCID", vbNull)
+        Dim Param103 As New SqlParameter("@Power", False)
+        Dim Param104 As New SqlParameter("@ProdMode", False)
+        Dim Param105 As New SqlParameter("@JobNumber", vbNull)
+        Dim Param106 As New SqlParameter("@JobQty", vbNull)
+        Dim Param107 As New SqlParameter("@CurrQty", vbNull)
+        Dim Param108 As New SqlParameter("@Running", False)
+        Dim Param109 As New SqlParameter("@MachFault", vbNull)
+        Dim Param110 As New SqlParameter("@MachFaultAck", vbNull)
+        Dim Param111 As New SqlParameter("@OpStop", vbNull)
+        Dim Param112 As New SqlParameter("@Activity", vbNull)
+        Dim Param113 As New SqlParameter("@Speed", vbNull)
+        Dim Param114 As New SqlParameter("@ET", vbNull)
+        SQLStatusParams.Add(Param100) : SQLStatusParams.Add(Param101) : SQLStatusParams.Add(Param102)
+        SQLStatusParams.Add(Param103) : SQLStatusParams.Add(Param104) : SQLStatusParams.Add(Param105)
+        SQLStatusParams.Add(Param106) : SQLStatusParams.Add(Param107) : SQLStatusParams.Add(Param108)
+        SQLStatusParams.Add(Param109) : SQLStatusParams.Add(Param110) : SQLStatusParams.Add(Param111)
+        SQLStatusParams.Add(Param112) : SQLStatusParams.Add(Param113) : SQLStatusParams.Add(Param114)
+
+        'For use in STOPS read query
+        Dim Param150 As New SqlParameter("@OrigStatusID", vbNull)
+        SQLStopsReadParams.Add(Param150)
+
+        'Condition Values
+        Dim Param200 As New SqlParameter("@CondStatusID", vbNull)
+        Dim Param201 As New SqlParameter("@TempMotor", vbNull)
+        Dim Param202 As New SqlParameter("@TempGearBox", vbNull)
+        Dim Param203 As New SqlParameter("@TempFeeder", vbNull)
+        Dim Param204 As New SqlParameter("@TempIndexer", vbNull)
+        SQLCondParams.Add(Param200) : SQLCondParams.Add(Param201) : SQLCondParams.Add(Param202)
+        SQLCondParams.Add(Param203) : SQLCondParams.Add(Param204)
+
+        'Stop Values
+        Dim Param300 As New SqlParameter("@StopStatusID", vbNull)
+        Dim Param301 As New SqlParameter("@MStop", False)
+        Dim Param302 As New SqlParameter("@OStop", False)
+        Dim Param303 As New SqlParameter("@MStopCode", vbNull)
+        Dim Param304 As New SqlParameter("@OStopCode", vbNull)
+        Dim Param305 As New SqlParameter("@StopCode", vbNull)
+        SQLStopsParams.Add(Param300) : SQLStopsParams.Add(Param301) : SQLStopsParams.Add(Param302)
+        SQLStopsParams.Add(Param303) : SQLStopsParams.Add(Param304) : SQLStopsParams.Add(Param305)
+
+        'Get Startup StatusID value from keyboard
+        Console.WriteLine("Enter the last read StatusID. Enter 0 if starting over.")
+        Console.Write("Enter StatusID value here: ")
+        strKeyVal = Console.ReadLine()
+        If IsNumeric(strKeyVal) Then
+            KeyVal = CInt(strKeyVal)
+            If KeyVal >= 0 Then
+                If MsgBox("Entered value is: " & KeyVal.ToString & vbCrLf & "Do you want to proceed?", MsgBoxStyle.YesNo) = vbNo Then
+                    End
+                End If
+            Else
+                MsgBox("Value must be positive or zero, loser.", MsgBoxStyle.Critical, "Data Entry Validation")
+                End
+            End If
+        Else
+            MsgBox("Value Is Not numeric.", MsgBoxStyle.Critical, "Data Entry Validation")
+            End
+        End If
+
+        'Generate SQL strings
+        'Read all rows from Original Status_RST-XVI table
+        strReadOrigSQL = "SELECT top (2000) * FROM [Status_RST-XVI] Where (Stamp >= CONVERT(DATETIME, '2019-04-01 00:00:00', 102)) AND (StatusID > " & KeyVal.ToString & ") ORDER BY STAMP ASC;"
+        'Read all Stops for a given StatusID
+        strReadStopsSQL = "SELECT * FROM [Stops] WHERE (StatusID = @OrigStatusID) " ' _
+        'Update the StatusIDList for the selected StatusID to be Converted=true
+        strWriteStatusIDConverted = "UPDATE StatusIDList SET [Converted] = 1 WHERE ([StatusID] = 0 );"
+
+        'Manage SQL Connections
+        dbConnOld = New SqlConnection(strConnOld)
+        dbConnNew = New SqlConnection(strConnNew)
+        dbConnOld.Open()
+        dbConnNew.Open()
+
+        'Assign SQLCommand Objects their CommandText and Connection information
+        dbCmdRead = New SqlCommand(strReadOrigSQL, dbConnOld) : dbCmdRead.CommandTimeout = 0
+        dbCmdRStops = New SqlCommand(strReadStopsSQL, dbConnOld) : dbCmdRStops.CommandTimeout = 0
+        dbCmdWIDList = New SqlCommand(strWriteStatusIDConverted, dbConnOld) : dbCmdWIDList.CommandTimeout = 0
+
+        'Assign Parameters to the Command Objects
+
+        Console.WriteLine("Preparing Queries...")
+
+        'Prepares objects for Stops processing later on
+        dbDT_Stops = New DataTable
+        dbDA_Stops = New SqlDataAdapter(dbCmdRStops)
+
+        'Start by filling Datatable with Original Status_RST-XVI rows
+        dbDT_Orig = New DataTable
+        dbDA_Orig = New SqlDataAdapter(dbCmdRead)
+        RecordCount = dbDA_Orig.Fill(dbDT_Orig)
+        If RecordCount = 0 Then
+            Throw New Exception("Invalid RecordCount from initial dbDT_Orig datatable fill command.")
+        End If
+
+        'Structure the three new working DataTables
+        'tblNewStatus, tblNewXVICond, tblNewStops
+        If Not MakeStatusTable() = True Then
+            Throw New Exception("Exception making tblNewStatus.")
+        End If
+        If Not MakeXVICondTable() = True Then
+            Throw New Exception("Exception making tblNewXVICond.")
+        End If
+        If Not MakeStopsTable() = True Then
+            Throw New Exception("Exception making tblNewStops.")
+        End If
+
+        Dim intOrigStatusID, intNewStatusID As Long
+        For Each row In dbDT_Orig.Rows
+            Try
+                'Make New Machine_Status entry
+                intOrigStatusID = row("StatusID")
+                intNewStatusID = AddStatusRow(row)
+
+                If intNewStatusID = 0 Then
+                    Throw New Exception("Exception in AddStatusRow on original StatusID: " & row("StatusID").ToString)
+                End If
+                'Make New EquipCond_RST-XVI entry
+                If AddXVICondRow(row, intNewStatusID) = 0 Then
+                    Throw New Exception("Exception in AddStatusRow on original StatusID: " & row("StatusID").ToString)
+                End If
+
+            Catch ex As Exception
+
+            End Try
+
+        Next
+
+
+        Using bulkCopy As SqlBulkCopy = New SqlBulkCopy(dbConnNew.ToString, SqlBulkCopyOptions.KeepIdentity)
+            bulkCopy.DestinationTableName = "dbo.Machine_Status"
+            'SqlBulkCopyOptions.KeepIdentity = True
+            Try
+                bulkCopy.WriteToServer(tblNewStatus)
+            Catch ex As Exception
+                MsgBox(ex.Message)
+            End Try
+        End Using
+
+        Console.Clear()
+        Console.WriteLine("Current Status")
+        Threading.Thread.Sleep(500)
+        'Start stopwatch for timing purposes
+        sw.Start()
+        TSpan1 = TimeSpan.FromSeconds(0)
+
+
+
+
+
+    End Sub
+
+
+    Public Function MakeStatusTable() As Boolean
+        MakeStatusTable = False
         ' Create a new DataTable named NewProducts.
-        Dim tblNewStatus As DataTable = New DataTable("NewStatus")
+        Try
+            tblNewStatus = New DataTable("NewStatus")
 
-        ' Add column objects to the table.
-        Dim StatusID As DataColumn = New DataColumn()
-        StatusID.DataType = System.Type.GetType("System.Int32")
-        StatusID.ColumnName = "StatusID"
-        StatusID.AutoIncrement = True
-        tblNewStatus.Columns.Add(StatusID)
+            ' Add column objects to the table.
+            Dim StatusID As DataColumn = New DataColumn()
+            StatusID.DataType = System.Type.GetType("System.Int64")
+            StatusID.ColumnName = "StatusID"
+            StatusID.AutoIncrement = True
+            StatusID.AutoIncrementSeed = 1
+            StatusID.AutoIncrementStep = 1
+            tblNewStatus.Columns.Add(StatusID)
 
-        Dim Stamp As DataColumn = New DataColumn()
-        Stamp.DataType = System.Type.GetType("System.DateTime")
-        Stamp.ColumnName = "Stamp"
-        tblNewStatus.Columns.Add(Stamp)
+            Dim Stamp As DataColumn = New DataColumn()
+            Stamp.DataType = System.Type.GetType("System.DateTime")
+            Stamp.ColumnName = "Stamp"
+            tblNewStatus.Columns.Add(Stamp)
 
-        Dim Comms As DataColumn = New DataColumn()
-        Comms.DataType = System.Type.GetType("System.Boolean")
-        Comms.ColumnName = "Comms"
-        tblNewStatus.Columns.Add(Comms)
+            Dim Comms As DataColumn = New DataColumn()
+            Comms.DataType = System.Type.GetType("System.Boolean")
+            Comms.ColumnName = "Comms"
+            tblNewStatus.Columns.Add(Comms)
 
-        Dim WCID As DataColumn = New DataColumn()
-        WCID.DataType = System.Type.GetType("System.Int16")
-        WCID.ColumnName = "WCID"
-        tblNewStatus.Columns.Add(WCID)
+            Dim WCID As DataColumn = New DataColumn()
+            WCID.DataType = System.Type.GetType("System.Int16")
+            WCID.ColumnName = "WCID"
+            tblNewStatus.Columns.Add(WCID)
 
-        Dim Power As DataColumn = New DataColumn()
-        Power.DataType = System.Type.GetType("System.Boolean")
-        Power.ColumnName = "Power"
-        tblNewStatus.Columns.Add(Power)
+            Dim Power As DataColumn = New DataColumn()
+            Power.DataType = System.Type.GetType("System.Boolean")
+            Power.ColumnName = "Power"
+            tblNewStatus.Columns.Add(Power)
 
-        Dim ProdMode As DataColumn = New DataColumn()
-        ProdMode.DataType = System.Type.GetType("System.Boolean")
-        ProdMode.ColumnName = "ProdMode"
-        tblNewStatus.Columns.Add(ProdMode)
+            Dim ProdMode As DataColumn = New DataColumn()
+            ProdMode.DataType = System.Type.GetType("System.Boolean")
+            ProdMode.ColumnName = "ProdMode"
+            tblNewStatus.Columns.Add(ProdMode)
 
-        Dim JobNumber As DataColumn = New DataColumn()
-        JobNumber.DataType = System.Type.GetType("System.Int16")
-        JobNumber.ColumnName = "JobNumber"
-        JobNumber.AllowDBNull = True
-        tblNewStatus.Columns.Add(JobNumber)
+            Dim JobNumber As DataColumn = New DataColumn()
+            JobNumber.DataType = System.Type.GetType("System.Int32")
+            JobNumber.ColumnName = "JobNumber"
+            JobNumber.AllowDBNull = True
+            tblNewStatus.Columns.Add(JobNumber)
 
-        Dim JobQty As DataColumn = New DataColumn()
-        JobQty.DataType = System.Type.GetType("System.Int16")
-        JobQty.ColumnName = "JobQty"
-        JobQty.AllowDBNull = True
-        tblNewStatus.Columns.Add(JobQty)
+            Dim JobQty As DataColumn = New DataColumn()
+            JobQty.DataType = System.Type.GetType("System.Int32")
+            JobQty.ColumnName = "JobQty"
+            JobQty.AllowDBNull = True
+            tblNewStatus.Columns.Add(JobQty)
 
-        Dim CurrQty As DataColumn = New DataColumn()
-        CurrQty.DataType = System.Type.GetType("System.Int16")
-        CurrQty.ColumnName = "CurrQty"
-        CurrQty.AllowDBNull = True
-        tblNewStatus.Columns.Add(CurrQty)
+            Dim CurrQty As DataColumn = New DataColumn()
+            CurrQty.DataType = System.Type.GetType("System.Int32")
+            CurrQty.ColumnName = "CurrQty"
+            CurrQty.AllowDBNull = True
+            tblNewStatus.Columns.Add(CurrQty)
 
-        Dim Running As DataColumn = New DataColumn()
-        Running.DataType = System.Type.GetType("System.Boolean")
-        Running.ColumnName = "Running"
-        tblNewStatus.Columns.Add(Running)
+            Dim Running As DataColumn = New DataColumn()
+            Running.DataType = System.Type.GetType("System.Boolean")
+            Running.ColumnName = "Running"
+            tblNewStatus.Columns.Add(Running)
 
-        Dim MachFault As DataColumn = New DataColumn()
-        MachFault.DataType = System.Type.GetType("System.Boolean")
-        MachFault.ColumnName = "MachFault"
-        tblNewStatus.Columns.Add(MachFault)
+            Dim MachFault As DataColumn = New DataColumn()
+            MachFault.DataType = System.Type.GetType("System.Boolean")
+            MachFault.ColumnName = "MachFault"
+            tblNewStatus.Columns.Add(MachFault)
 
-        Dim MachFaultAck As DataColumn = New DataColumn()
-        MachFaultAck.DataType = System.Type.GetType("System.Boolean")
-        MachFaultAck.ColumnName = "MachFaultAck"
-        tblNewStatus.Columns.Add(MachFaultAck)
+            Dim MachFaultAck As DataColumn = New DataColumn()
+            MachFaultAck.DataType = System.Type.GetType("System.Boolean")
+            MachFaultAck.ColumnName = "MachFaultAck"
+            tblNewStatus.Columns.Add(MachFaultAck)
 
-        Dim OpStop As DataColumn = New DataColumn()
-        OpStop.DataType = System.Type.GetType("System.Boolean")
-        OpStop.ColumnName = "OpStop"
-        tblNewStatus.Columns.Add(OpStop)
+            Dim OpStop As DataColumn = New DataColumn()
+            OpStop.DataType = System.Type.GetType("System.Boolean")
+            OpStop.ColumnName = "OpStop"
+            tblNewStatus.Columns.Add(OpStop)
 
-        Dim Activity As DataColumn = New DataColumn()
-        Activity.DataType = System.Type.GetType("System.Boolean")
-        Activity.ColumnName = "Activity"
-        tblNewStatus.Columns.Add(Activity)
+            Dim Activity As DataColumn = New DataColumn()
+            Activity.DataType = System.Type.GetType("System.Boolean")
+            Activity.ColumnName = "Activity"
+            tblNewStatus.Columns.Add(Activity)
 
-        Dim Speed As DataColumn = New DataColumn()
-        Speed.DataType = System.Type.GetType("System.Int16")
-        Speed.ColumnName = "Speed"
-        tblNewStatus.Columns.Add(Speed)
+            Dim Speed As DataColumn = New DataColumn()
+            Speed.DataType = System.Type.GetType("System.Int16")
+            Speed.ColumnName = "Speed"
+            tblNewStatus.Columns.Add(Speed)
 
-        Dim ElapsedTime As DataColumn = New DataColumn()
-        ElapsedTime.DataType = System.Type.GetType("System.Int16")
-        ElapsedTime.ColumnName = "ElapsedTime"
-        ElapsedTime.AllowDBNull = True
-        tblNewStatus.Columns.Add(ElapsedTime)
+            Dim ElapsedTime As DataColumn = New DataColumn()
+            ElapsedTime.DataType = System.Type.GetType("System.Int16")
+            ElapsedTime.ColumnName = "ElapsedTime"
+            ElapsedTime.AllowDBNull = True
+            tblNewStatus.Columns.Add(ElapsedTime)
 
-        Return tblNewStatus
+            MakeStatusTable = True
+        Catch ex As Exception
+            MsgBox(ex.Message, MsgBoxStyle.Critical, "Exception in function MakeStatusTable")
+            MakeStatusTable = False
+        End Try
+    End Function
+
+    Public Function MakeXVICondTable() As Boolean
+        MakeXVICondTable = False
+        ' Create a new DataTable named NewProducts.
+        Try
+            tblNewXVICond = New DataTable("NewXVICond")
+            ' Add column objects to the table.
+            Dim ECID As DataColumn = New DataColumn()
+            ECID.DataType = System.Type.GetType("System.Int64")
+            ECID.ColumnName = "ECID"
+            ECID.AutoIncrement = True
+            ECID.AutoIncrementSeed = 1
+            ECID.AutoIncrementStep = 1
+            tblNewXVICond.Columns.Add(ECID)
+
+            Dim StatusID As DataColumn = New DataColumn()
+            StatusID.DataType = System.Type.GetType("System.Int64")
+            StatusID.ColumnName = "StatusID"
+            tblNewXVICond.Columns.Add(StatusID)
+
+            Dim TempMotor As DataColumn = New DataColumn()
+            TempMotor.DataType = System.Type.GetType("System.Int16")
+            TempMotor.ColumnName = "TempMotor"
+            tblNewXVICond.Columns.Add(TempMotor)
+
+            Dim TempGearBox As DataColumn = New DataColumn()
+            TempGearBox.DataType = System.Type.GetType("System.Int16")
+            TempGearBox.ColumnName = "TempGearBox"
+            tblNewXVICond.Columns.Add(TempGearBox)
+
+            Dim TempFeeder As DataColumn = New DataColumn()
+            TempFeeder.DataType = System.Type.GetType("System.Int32")
+            TempFeeder.ColumnName = "TempFeeder"
+            TempFeeder.AllowDBNull = True
+            tblNewXVICond.Columns.Add(TempFeeder)
+
+            Dim TempIndexer As DataColumn = New DataColumn()
+            TempIndexer.DataType = System.Type.GetType("System.Int32")
+            TempIndexer.ColumnName = "TempIndexer"
+            TempIndexer.AllowDBNull = True
+            tblNewXVICond.Columns.Add(TempIndexer)
+
+            MakeXVICondTable = True
+        Catch ex As Exception
+            MsgBox(ex.Message, MsgBoxStyle.Critical, "Exception in function MakeXVICondTable")
+            MakeXVICondTable = False
+        End Try
+    End Function
+
+    Public Function MakeStopsTable() As Boolean
+        MakeStopsTable = False
+        ' Create a new DataTable named NewProducts.
+        Try
+            tblNewStops = New DataTable("NewStops")
+            ' Add column objects to the table.
+            Dim StopID As DataColumn = New DataColumn()
+            StopID.DataType = System.Type.GetType("System.Int64")
+            StopID.ColumnName = "StopID"
+            StopID.AutoIncrement = True
+            StopID.AutoIncrementSeed = 1
+            StopID.AutoIncrementStep = 1
+            tblNewStops.Columns.Add(StopID)
+
+            Dim StatusID As DataColumn = New DataColumn()
+            StatusID.DataType = System.Type.GetType("System.Int32")
+            StatusID.ColumnName = "StatusID"
+            tblNewStops.Columns.Add(StatusID)
+
+            Dim MStop As DataColumn = New DataColumn()
+            MStop.DataType = System.Type.GetType("System.Boolean")
+            MStop.ColumnName = "MStop"
+            tblNewStops.Columns.Add(MStop)
+
+            Dim OStop As DataColumn = New DataColumn()
+            OStop.DataType = System.Type.GetType("System.Int16")
+            OStop.ColumnName = "OStop"
+            tblNewStops.Columns.Add(OStop)
+
+            Dim MStopCode As DataColumn = New DataColumn()
+            MStopCode.DataType = System.Type.GetType("System.Int32")
+            MStopCode.ColumnName = "MStopCode"
+            MStopCode.AllowDBNull = True
+            tblNewStops.Columns.Add(MStopCode)
+
+            Dim OStopCode As DataColumn = New DataColumn()
+            OStopCode.DataType = System.Type.GetType("System.Int32")
+            OStopCode.ColumnName = "OStopCode"
+            OStopCode.AllowDBNull = True
+            tblNewStops.Columns.Add(OStopCode)
+
+            Dim StopCode As DataColumn = New DataColumn()
+            StopCode.DataType = System.Type.GetType("System.Int32")
+            StopCode.ColumnName = "StopCode"
+            StopCode.AllowDBNull = True
+            tblNewStops.Columns.Add(StopCode)
+
+            MakeStopsTable = True
+        Catch ex As Exception
+            MsgBox(ex.Message, MsgBoxStyle.Critical, "Exception in function MakeStopsTable")
+            MakeStopsTable = False
+        End Try
     End Function
 
 
-    Public Function MakeStopsTable() As DataTable
-        ' Create a new DataTable named NewProducts.
-        Dim tblNewStops As DataTable = New DataTable("NewStops")
 
-        ' Add column objects to the table.
-        Dim StopID As DataColumn = New DataColumn()
-        StopID.DataType = System.Type.GetType("System.Int32")
-        StopID.ColumnName = "StopID"
-        StopID.AutoIncrement = True
-        tblNewStops.Columns.Add(StopID)
+    Private Function AddStatusRow(appendRow As DataRow) As Long
+        AddStatusRow = 0
+        Dim newStatusRow As DataRow
+        Try
+            newStatusRow = tblNewStatus.NewRow()
+            newStatusRow("Stamp") = appendRow("Stamp")
+            newStatusRow("Comms") = appendRow("Comms")
+            newStatusRow("WCID") = appendRow("WCID")
+            newStatusRow("Power") = appendRow("Power")
+            newStatusRow("ProdMode") = appendRow("ProdMode")
+            newStatusRow("JobNumber") = appendRow("JobNumber")
+            newStatusRow("JobQty") = appendRow("JobQty")
+            newStatusRow("CurrQty") = appendRow("CurrQty")
+            newStatusRow("Running") = appendRow("Running")
+            newStatusRow("MachFault") = appendRow("MachFault")
+            newStatusRow("MachFaultAck") = appendRow("MachFaultAck")
+            newStatusRow("OpStop") = appendRow("OpStop")
+            newStatusRow("Activity") = appendRow("Activity")
+            newStatusRow("Speed") = appendRow("Speed")
+            newStatusRow("ElapsedTime") = appendRow("ElapsedTime")
+            tblNewStatus.Rows.Add(newStatusRow)
+            tblNewStatus.AcceptChanges()
+            AddStatusRow = newStatusRow("StatusID")
+        Catch ex As Exception
+            Beep()
+        End Try
+    End Function
 
-        Dim StatusID As DataColumn = New DataColumn()
-        StatusID.DataType = System.Type.GetType("System.Int32")
-        StatusID.ColumnName = "StatusID"
-        tblNewStops.Columns.Add(StatusID)
+    Function AddXVICondRow(appendRow As DataRow, NewID As Long) As Long
+        AddXVICondRow = 0
+        Dim newCondRow As DataRow
+        Try
+            newCondRow = tblNewXVICond.NewRow()
+            newCondRow("StatusID") = NewID
+            newCondRow("TempMotor") = appendRow("TempMotor")
+            newCondRow("TempGearBox") = appendRow("TempGearBox")
+            newCondRow("TempFeeder") = appendRow("TempFeeder")
+            newCondRow("TempIndexer") = appendRow("TempIndexer")
+            tblNewXVICond.Rows.Add(newCondRow)
+            tblNewXVICond.AcceptChanges()
+            AddXVICondRow = newCondRow("ECID")
+        Catch ex As Exception
+            MsgBox(ex.Message)
+            Beep()
+        End Try
 
-        Dim MStop As DataColumn = New DataColumn()
-        MStop.DataType = System.Type.GetType("System.Boolean")
-        MStop.ColumnName = "MStop"
-        tblNewStops.Columns.Add(MStop)
+    End Function
 
-        Dim OStop As DataColumn = New DataColumn()
-        OStop.DataType = System.Type.GetType("System.Int16")
-        OStop.ColumnName = "OStop"
-        tblNewStops.Columns.Add(OStop)
+    Function AddNewStopsRow(appendRow As DataRow, NewID As Long) As Long
+        AddNewStopsRow = 0
+        Dim newStopRow As DataRow
+        Try
+            newStopRow = tblNewStops.NewRow()
+            newStopRow("StatusID") = NewID
+            newStopRow("MStop") = appendRow("MStop")
+            newStopRow("OStop") = appendRow("OStop")
+            newStopRow("MStopCode") = appendRow("MStopCode")
+            newStopRow("OStopCode") = appendRow("OStopCode")
+            newStopRow("StopCode") = appendRow("StopCode")
+            tblNewStops.Rows.Add(newStopRow)
+            tblNewStops.AcceptChanges()
+            AddNewStopsRow = newStopRow("ECID")
+        Catch ex As Exception
+            MsgBox(ex.Message)
+            Beep()
+        End Try
 
-        Dim MStopCode As DataColumn = New DataColumn()
-        MStopCode.DataType = System.Type.GetType("System.Int32")
-        MStopCode.ColumnName = "MStopCode"
-        MStopCode.AllowDBNull = True
-        tblNewStops.Columns.Add(MStopCode)
-
-        Dim OStopCode As DataColumn = New DataColumn()
-        OStopCode.DataType = System.Type.GetType("System.Int32")
-        OStopCode.ColumnName = "OStopCode"
-        OStopCode.AllowDBNull = True
-        tblNewStops.Columns.Add(OStopCode)
-
-        Dim StopCode As DataColumn = New DataColumn()
-        StopCode.DataType = System.Type.GetType("System.Int32")
-        StopCode.ColumnName = "StopCode"
-        StopCode.AllowDBNull = True
-        tblNewStops.Columns.Add(StopCode)
-
-        Return tblNewStops
     End Function
 End Module
