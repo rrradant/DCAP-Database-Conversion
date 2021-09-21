@@ -751,4 +751,144 @@ Module Module1
         End Using
     End Sub
 
+    Public Function MakeStatusTable() As DataTable
+        ' Create a new DataTable named NewProducts.
+        Dim tblNewStatus As DataTable = New DataTable("NewStatus")
+
+        ' Add column objects to the table.
+        Dim StatusID As DataColumn = New DataColumn()
+        StatusID.DataType = System.Type.GetType("System.Int32")
+        StatusID.ColumnName = "StatusID"
+        StatusID.AutoIncrement = True
+        tblNewStatus.Columns.Add(StatusID)
+
+        Dim Stamp As DataColumn = New DataColumn()
+        Stamp.DataType = System.Type.GetType("System.DateTime")
+        Stamp.ColumnName = "Stamp"
+        tblNewStatus.Columns.Add(Stamp)
+
+        Dim Comms As DataColumn = New DataColumn()
+        Comms.DataType = System.Type.GetType("System.Boolean")
+        Comms.ColumnName = "Comms"
+        tblNewStatus.Columns.Add(Comms)
+
+        Dim WCID As DataColumn = New DataColumn()
+        WCID.DataType = System.Type.GetType("System.Int16")
+        WCID.ColumnName = "WCID"
+        tblNewStatus.Columns.Add(WCID)
+
+        Dim Power As DataColumn = New DataColumn()
+        Power.DataType = System.Type.GetType("System.Boolean")
+        Power.ColumnName = "Power"
+        tblNewStatus.Columns.Add(Power)
+
+        Dim ProdMode As DataColumn = New DataColumn()
+        ProdMode.DataType = System.Type.GetType("System.Boolean")
+        ProdMode.ColumnName = "ProdMode"
+        tblNewStatus.Columns.Add(ProdMode)
+
+        Dim JobNumber As DataColumn = New DataColumn()
+        JobNumber.DataType = System.Type.GetType("System.Int16")
+        JobNumber.ColumnName = "JobNumber"
+        JobNumber.AllowDBNull = True
+        tblNewStatus.Columns.Add(JobNumber)
+
+        Dim JobQty As DataColumn = New DataColumn()
+        JobQty.DataType = System.Type.GetType("System.Int16")
+        JobQty.ColumnName = "JobQty"
+        JobQty.AllowDBNull = True
+        tblNewStatus.Columns.Add(JobQty)
+
+        Dim CurrQty As DataColumn = New DataColumn()
+        CurrQty.DataType = System.Type.GetType("System.Int16")
+        CurrQty.ColumnName = "CurrQty"
+        CurrQty.AllowDBNull = True
+        tblNewStatus.Columns.Add(CurrQty)
+
+        Dim Running As DataColumn = New DataColumn()
+        Running.DataType = System.Type.GetType("System.Boolean")
+        Running.ColumnName = "Running"
+        tblNewStatus.Columns.Add(Running)
+
+        Dim MachFault As DataColumn = New DataColumn()
+        MachFault.DataType = System.Type.GetType("System.Boolean")
+        MachFault.ColumnName = "MachFault"
+        tblNewStatus.Columns.Add(MachFault)
+
+        Dim MachFaultAck As DataColumn = New DataColumn()
+        MachFaultAck.DataType = System.Type.GetType("System.Boolean")
+        MachFaultAck.ColumnName = "MachFaultAck"
+        tblNewStatus.Columns.Add(MachFaultAck)
+
+        Dim OpStop As DataColumn = New DataColumn()
+        OpStop.DataType = System.Type.GetType("System.Boolean")
+        OpStop.ColumnName = "OpStop"
+        tblNewStatus.Columns.Add(OpStop)
+
+        Dim Activity As DataColumn = New DataColumn()
+        Activity.DataType = System.Type.GetType("System.Boolean")
+        Activity.ColumnName = "Activity"
+        tblNewStatus.Columns.Add(Activity)
+
+        Dim Speed As DataColumn = New DataColumn()
+        Speed.DataType = System.Type.GetType("System.Int16")
+        Speed.ColumnName = "Speed"
+        tblNewStatus.Columns.Add(Speed)
+
+        Dim ElapsedTime As DataColumn = New DataColumn()
+        ElapsedTime.DataType = System.Type.GetType("System.Int16")
+        ElapsedTime.ColumnName = "ElapsedTime"
+        ElapsedTime.AllowDBNull = True
+        tblNewStatus.Columns.Add(ElapsedTime)
+
+        Return tblNewStatus
+    End Function
+
+
+    Public Function MakeStopsTable() As DataTable
+        ' Create a new DataTable named NewProducts.
+        Dim tblNewStops As DataTable = New DataTable("NewStops")
+
+        ' Add column objects to the table.
+        Dim StopID As DataColumn = New DataColumn()
+        StopID.DataType = System.Type.GetType("System.Int32")
+        StopID.ColumnName = "StopID"
+        StopID.AutoIncrement = True
+        tblNewStops.Columns.Add(StopID)
+
+        Dim StatusID As DataColumn = New DataColumn()
+        StatusID.DataType = System.Type.GetType("System.Int32")
+        StatusID.ColumnName = "StatusID"
+        tblNewStops.Columns.Add(StatusID)
+
+        Dim MStop As DataColumn = New DataColumn()
+        MStop.DataType = System.Type.GetType("System.Boolean")
+        MStop.ColumnName = "MStop"
+        tblNewStops.Columns.Add(MStop)
+
+        Dim OStop As DataColumn = New DataColumn()
+        OStop.DataType = System.Type.GetType("System.Int16")
+        OStop.ColumnName = "OStop"
+        tblNewStops.Columns.Add(OStop)
+
+        Dim MStopCode As DataColumn = New DataColumn()
+        MStopCode.DataType = System.Type.GetType("System.Int32")
+        MStopCode.ColumnName = "MStopCode"
+        MStopCode.AllowDBNull = True
+        tblNewStops.Columns.Add(MStopCode)
+
+        Dim OStopCode As DataColumn = New DataColumn()
+        OStopCode.DataType = System.Type.GetType("System.Int32")
+        OStopCode.ColumnName = "OStopCode"
+        OStopCode.AllowDBNull = True
+        tblNewStops.Columns.Add(OStopCode)
+
+        Dim StopCode As DataColumn = New DataColumn()
+        StopCode.DataType = System.Type.GetType("System.Int32")
+        StopCode.ColumnName = "StopCode"
+        StopCode.AllowDBNull = True
+        tblNewStops.Columns.Add(StopCode)
+
+        Return tblNewStops
+    End Function
 End Module
