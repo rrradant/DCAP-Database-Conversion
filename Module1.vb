@@ -3,35 +3,77 @@ Imports System.IO
 Imports System.Threading
 
 Module Module1
-    Public tblNewStatus As DataTable
-    Public tblNewXVICond As DataTable
-    Public tblNewStops As DataTable
+
+    Public strConnOld, strConnNew As String
+    Public dbDT_Stops, tblNewStatus, tblNewXVICond, tblNewStops As DataTable
 
     Sub Main()
-        Dim sw As New Stopwatch
-        Dim RecordCount, StopCount As Long
+        Dim LastOrigStat, LastNewStat As Long
+        Dim StopCount As Long
+        'Dim dbDT_Stops As DataTable
+        Dim dbDA_Stops As SqlDataAdapter
+        Dim dbCmdRStops As SqlCommand
+        Dim dbConnOld As SqlConnection
+        Dim strReadStopsSQL As String
 
-        Dim dbDT_Orig, dbDT_Stops As DataTable
+        'Assign Connection Strings.
+        If SetConnections() = False Then
+            Throw New Exception("Failure to sassign connection strings. SetConnections()")
+        End If
+
+        'Fill the Stops data table with all the original stops
+        'Places full results into DataTable dbDT_Stops
+        strReadStopsSQL = "SELECT * FROM [Stops] ;"
+        dbCmdRStops = New SqlCommand(strReadStopsSQL, dbConnOld) : dbCmdRStops.CommandTimeout = 0
+        dbDT_Stops = New DataTable
+        dbDA_Stops = New SqlDataAdapter(dbCmdRStops)
+        StopCount = dbDA_Stops.Fill(dbDT_Stops)
+        If StopCount = 0 Then
+            Throw New Exception("Invalid RecordCount from initial dbDT_Stops datatable fill command.")
+        End If
+
+
+        Using bulkCopy As SqlBulkCopy = New SqlBulkCopy(strConnNew, SqlBulkCopyOptions.KeepIdentity)
+            bulkCopy.DestinationTableName = "dbo.[Machine_Status]"
+            Try
+                bulkCopy.WriteToServer(tblNewStatus)
+            Catch ex As Exception
+                MsgBox(ex.Message)
+            End Try
+
+            bulkCopy.DestinationTableName = "dbo.[EquipCond_RST-XVI]"
+            Try
+                bulkCopy.WriteToServer(tblNewXVICond)
+            Catch ex As Exception
+                MsgBox(ex.Message)
+            End Try
+
+            bulkCopy.DestinationTableName = "dbo.[Stops]"
+            Try
+                bulkCopy.WriteToServer(tblNewStops)
+            Catch ex As Exception
+                MsgBox(ex.Message)
+            End Try
+        End Using
+
+        Console.Clear()
+    End Sub
+
+    Function ConvertData(intStatSeed As Long) As Long
+        Dim sw As New Stopwatch
+        Dim RecordCount As Long
+
+        Dim dbDT_Orig As DataTable
         Dim FStops As DataRow()
-        Dim dbDA_Orig, dbDA_Stops As SqlDataAdapter
-        Dim dbCmdRead, dbCmdRStops, dbCmdWIDList As SqlCommand
+        Dim dbDA_Orig As SqlDataAdapter
+        Dim dbCmdRead, dbCmdWIDList As SqlCommand
         Dim dbConnOld, dbConnNew As SqlConnection
 
         Dim strReadOrigSQL, strReadStopsSQL, strWriteStatusIDConverted As String
-        Dim strConnOld, strConnNew, strKeyVal As String
+        Dim strKeyVal As String
         Dim n, i, KeyVal As Long
         Dim TSpan1, TSpan2 As TimeSpan
 
-        'Define connection strings
-        'strConnOld = "Data Source=CT0000141\SQLEXPRESS_RRR;Initial Catalog=ProductionData;Trusted_Connection=Yes;Connection Timeout=15;"
-        'strConnOld = "Data Source=CTENG02\ENGSQL2014;Initial Catalog=ProductionData;Trusted_Connection=Yes;Connection Timeout=30;"
-        strConnOld = "Data Source=CT0000141\SQLEXPRESS_RRR;Initial Catalog=ProductionData;Trusted_Connection=Yes;Connection Timeout=30;"
-        'strConnOld = "Data Source=RUSSELLDESKTOP\SQLEXPRESS;Initial Catalog=ProductionData;Trusted_Connection=Yes;Connection Timeout=30;"
-
-        'strConnNew = "Data Source=CT0000141\SQLEXPRESS_RRR;Initial Catalog=ProductionData;Trusted_Connection=Yes;Connection Timeout=30;"
-        'strConnNew = "Data Source=CTENG02\ENGSQL2017;Initial Catalog=DCAP_Data;Trusted_Connection=Yes;Connection Timeout=30;"
-        strConnNew = "Data Source=CT0000141\SQLEXPRESS_RRR;Initial Catalog=DCAP_Data;Trusted_Connection=Yes;Connection Timeout=30;"
-        'strConnNew = "Data Source=RUSSELLDESKTOP\SQLEXPRESS;Initial Catalog=DCAP_Data;Trusted_Connection=Yes;Connection Timeout=30;"
 
         'Get Startup StatusID value from keyboard
         Console.WriteLine("Enter the last read StatusID. Enter 0 if starting over.")
@@ -55,10 +97,7 @@ Module Module1
         'Generate SQL strings
         'Read all rows from Original Status_RST-XVI table
         strReadOrigSQL = "SELECT * FROM [Status_RST-XVI] Where (Stamp >= CONVERT(DATETIME, '2019-04-01 00:00:00', 102)) AND (StatusID > " & KeyVal.ToString & ") ORDER BY STAMP ASC;"
-        'Read all Stops for a given StatusID
-        'strReadStopsSQL = "SELECT * FROM [Stops] WHERE (StatusID = @OrigStatusID) "
-        'Read all original stops
-        strReadStopsSQL = "SELECT * FROM [Stops] ;"
+
         'Update the StatusIDList for the selected StatusID to be Converted=true
         strWriteStatusIDConverted = "UPDATE StatusIDList SET [Converted] = 1 WHERE ([StatusID] = 0 );"
 
@@ -70,7 +109,7 @@ Module Module1
 
         'Assign SQLCommand Objects their CommandText and Connection information
         dbCmdRead = New SqlCommand(strReadOrigSQL, dbConnOld) : dbCmdRead.CommandTimeout = 0
-        dbCmdRStops = New SqlCommand(strReadStopsSQL, dbConnOld) : dbCmdRStops.CommandTimeout = 0
+        'dbCmdRStops = New SqlCommand(strReadStopsSQL, dbConnOld) : dbCmdRStops.CommandTimeout = 0
         dbCmdWIDList = New SqlCommand(strWriteStatusIDConverted, dbConnOld) : dbCmdWIDList.CommandTimeout = 0
 
         Console.WriteLine("Preparing Queries...")
@@ -85,16 +124,6 @@ Module Module1
             'Console.WriteLine("Total Status Records: " & Format(RecordCount, "N0"))
         End If
 
-        'Fill the Stops data table wit the original stops
-        'Prepares objects for Stops processing later on
-        dbDT_Stops = New DataTable
-        dbDA_Stops = New SqlDataAdapter(dbCmdRStops)
-        StopCount = dbDA_Stops.Fill(dbDT_Stops)
-        If StopCount = 0 Then
-            Throw New Exception("Invalid RecordCount from initial dbDT_Stops datatable fill command.")
-        Else
-            'Console.WriteLine("Total Stops: " & Format(StopCount, "N0"))
-        End If
 
         'Structure the three new working DataTables
         'tblNewStatus, tblNewXVICond, tblNewStops
@@ -156,37 +185,32 @@ Module Module1
                     Next
                 End If
             Catch ex As Exception
-
+                Call Write2Log(ex.Message)
             End Try
-
         Next
+    End Function
 
-        'Using bulkCopy As SqlBulkCopy = New SqlBulkCopy(dbConnNew)
-        Using bulkCopy As SqlBulkCopy = New SqlBulkCopy(strConnNew, SqlBulkCopyOptions.KeepIdentity)
-            bulkCopy.DestinationTableName = "dbo.[Machine_Status]"
-            Try
-                bulkCopy.WriteToServer(tblNewStatus)
-            Catch ex As Exception
-                MsgBox(ex.Message)
-            End Try
+    Function SetConnections() As Boolean
+        SetConnections = False
+        Try
+            'Define connection strings
+            'Source Database
+            'strConnOld = "Data Source=CT0000141\SQLEXPRESS_RRR;Initial Catalog=ProductionData;Trusted_Connection=Yes;Connection Timeout=15;"
+            'strConnOld = "Data Source=CTENG02\ENGSQL2014;Initial Catalog=ProductionData;Trusted_Connection=Yes;Connection Timeout=30;"
+            'strConnOld = "Data Source=CT0000141\SQLEXPRESS_RRR;Initial Catalog=ProductionData;Trusted_Connection=Yes;Connection Timeout=30;"
+            strConnOld = "Data Source=RUSSELLDESKTOP\SQLEXPRESS;Initial Catalog=ProductionData;Trusted_Connection=Yes;Connection Timeout=30;"
 
-            bulkCopy.DestinationTableName = "dbo.[EquipCond_RST-XVI]"
-            Try
-                bulkCopy.WriteToServer(tblNewXVICond)
-            Catch ex As Exception
-                MsgBox(ex.Message)
-            End Try
+            'Destination Database
+            'strConnNew = "Data Source=CT0000141\SQLEXPRESS_RRR;Initial Catalog=ProductionData;Trusted_Connection=Yes;Connection Timeout=30;"
+            'strConnNew = "Data Source=CTENG02\ENGSQL2017;Initial Catalog=DCAP_Data;Trusted_Connection=Yes;Connection Timeout=30;"
+            'strConnNew = "Data Source=CT0000141\SQLEXPRESS_RRR;Initial Catalog=DCAP_Data;Trusted_Connection=Yes;Connection Timeout=30;"
+            strConnNew = "Data Source=RUSSELLDESKTOP\SQLEXPRESS;Initial Catalog=DCAP_Data;Trusted_Connection=Yes;Connection Timeout=30;"
 
-            bulkCopy.DestinationTableName = "dbo.[Stops]"
-            Try
-                bulkCopy.WriteToServer(tblNewStops)
-            Catch ex As Exception
-                MsgBox(ex.Message)
-            End Try
-        End Using
-
-        Console.Clear()
-    End Sub
+            SetConnections = True
+        Catch ex As Exception
+            Call Write2Log("Exception setting connection strings. " & ex.Message)
+        End Try
+    End Function
 
     Sub Write2Log(message As String)
         Dim strLogFile As String
