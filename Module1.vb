@@ -8,58 +8,121 @@ Module Module1
     Public dbDT_Stops, tblNewStatus, tblNewXVICond, tblNewStops As DataTable
 
     Sub Main()
-        Dim LastOrigStat, LastNewStat As Long
-        Dim StopCount As Long
-        'Dim dbDT_Stops As DataTable
+        Dim StartOrigStat, MaxOrigStat, LastOrigStat, LastNewStat As Long
+        Dim StopCount, AllCount, CurrCount As Long
         Dim dbDA_Stops As SqlDataAdapter
         Dim dbCmdRStops As SqlCommand
         Dim dbConnOld As SqlConnection
         Dim strReadStopsSQL As String
+        Dim AllDone As Boolean
 
-        'Assign Connection Strings.
-        If SetConnections() = False Then
-            Throw New Exception("Failure to sassign connection strings. SetConnections()")
-        End If
-
-        'Fill the Stops data table with all the original stops
-        'Places full results into DataTable dbDT_Stops
-        strReadStopsSQL = "SELECT * FROM [Stops] ;"
-        dbCmdRStops = New SqlCommand(strReadStopsSQL, dbConnOld) : dbCmdRStops.CommandTimeout = 0
-        dbDT_Stops = New DataTable
-        dbDA_Stops = New SqlDataAdapter(dbCmdRStops)
-        StopCount = dbDA_Stops.Fill(dbDT_Stops)
-        If StopCount = 0 Then
-            Throw New Exception("Invalid RecordCount from initial dbDT_Stops datatable fill command.")
-        End If
+        Try
+            'Assign Connection Strings.
+            If SetConnections() = False Then
+                Throw New Exception("Failure to sassign connection strings. SetConnections()")
+            End If
+            dbConnOld = New SqlConnection(strConnOld)
+            dbConnOld.Open()
+            'dbConnNew = New SqlConnection(strConnNew)
+            'dbConnNew.Open()
 
 
-        Using bulkCopy As SqlBulkCopy = New SqlBulkCopy(strConnNew, SqlBulkCopyOptions.KeepIdentity)
-            bulkCopy.DestinationTableName = "dbo.[Machine_Status]"
-            Try
-                bulkCopy.WriteToServer(tblNewStatus)
-            Catch ex As Exception
-                MsgBox(ex.Message)
-            End Try
+            'Fill the Stops data table with all the original stops
+            'Places full results into DataTable dbDT_Stops
+            strReadStopsSQL = "SELECT * FROM [Stops] ;"
+            dbCmdRStops = New SqlCommand(strReadStopsSQL, dbConnOld) : dbCmdRStops.CommandTimeout = 0
+            dbDT_Stops = New DataTable
+            dbDA_Stops = New SqlDataAdapter(dbCmdRStops)
+            StopCount = dbDA_Stops.Fill(dbDT_Stops)
+            If StopCount = 0 Then
+                Throw New Exception("Invalid RecordCount from initial dbDT_Stops datatable fill command.")
+            End If
 
-            bulkCopy.DestinationTableName = "dbo.[EquipCond_RST-XVI]"
-            Try
-                bulkCopy.WriteToServer(tblNewXVICond)
-            Catch ex As Exception
-                MsgBox(ex.Message)
-            End Try
+            'Queries Original Status_RST-XVI to get number or rows.
+            Dim cmdOrig As New SqlCommand("SELECT COUNT([StatusID]) FROM [Status_RST-XVI] Where " _
+                    & "(Stamp >= CONVERT(DATETIME, '2019-04-01 00:00:00', 102));", dbConnOld)
+            Dim dtOrig = New DataTable
+            Dim daOrig = New SqlDataAdapter(cmdOrig)
+            AllCount = cmdOrig.ExecuteScalar()
+            If AllCount = 0 Then
+                Throw New Exception("Invalid AllCount from initial dbo.Status_RST-XVI table.")
+            End If
+            cmdOrig.CommandText = "SELECT MIN(StatusID) FROM [Status_RST-XVI] WHERE " _
+                & "(Stamp >= CONVERT(DATETIME, '2019-04-01 00:00:00', 102))"
+            StartOrigStat = cmdOrig.ExecuteScalar
+            If StartOrigStat = 0 Then
+                Throw New Exception("Invalid StartOrigStat from initial dbo.Status_RST-XVI table.")
+            End If
+            cmdOrig.CommandText = "SELECT MAX(StatusID) FROM [Status_RST-XVI] WHERE " _
+                & "(Stamp >= CONVERT(DATETIME, '2019-04-01 00:00:00', 102))"
+            MaxOrigStat = cmdOrig.ExecuteScalar
+            dtOrig.Dispose() : daOrig.Dispose()
 
-            bulkCopy.DestinationTableName = "dbo.[Stops]"
-            Try
-                bulkCopy.WriteToServer(tblNewStops)
-            Catch ex As Exception
-                MsgBox(ex.Message)
-            End Try
-        End Using
+            'Structure the three new working DataTables
+            'tblNewStatus, tblNewXVICond, tblNewStops
+            If Not MakeStatusTable(1) = True Then
+                Throw New Exception("Exception making tblNewStatus.")
+            End If
+            If Not MakeXVICondTable() = True Then
+                Throw New Exception("Exception making tblNewXVICond.")
+            End If
+            If Not MakeStopsTable() = True Then
+                Throw New Exception("Exception making tblNewStops.")
+            End If
 
-        Console.Clear()
+            AllDone = False
+            LastOrigStat = StartOrigStat - 1 'Increment down by 1 for initial batch
+            LastNewStat = 0
+            Do
+                'This passes the starting StatusID field for the Select query in ConvertData
+                'and returns the last New StatusID so the Seed setting can be used for the next batch.
+                LastNewStat = ConvertData(LastOrigStat)
+                If LastNewStat = -1 Then
+                    Throw New Exception("All messed up in ConvertData...")
+                Else
+
+                End If
+
+
+                'The LastOrigStat value returned is equal to the Max in the table
+                'All done. If not, reseed and repeat.
+                If LastOrigStat = MaxOrigStat Then
+                    AllDone = True
+                Else
+                    tblNewStatus.Columns(0).AutoIncrementSeed = LastNewStat + 1
+                End If
+            Loop Until AllDone = True
+
+            Using bulkCopy As SqlBulkCopy = New SqlBulkCopy(strConnNew, SqlBulkCopyOptions.KeepIdentity)
+                bulkCopy.DestinationTableName = "dbo.[Machine_Status]"
+                Try
+                    bulkCopy.WriteToServer(tblNewStatus)
+                Catch ex As Exception
+                    MsgBox(ex.Message)
+                End Try
+
+                bulkCopy.DestinationTableName = "dbo.[EquipCond_RST-XVI]"
+                Try
+                    bulkCopy.WriteToServer(tblNewXVICond)
+                Catch ex As Exception
+                    MsgBox(ex.Message)
+                End Try
+
+                bulkCopy.DestinationTableName = "dbo.[Stops]"
+                Try
+                    bulkCopy.WriteToServer(tblNewStops)
+                Catch ex As Exception
+                    MsgBox(ex.Message)
+                End Try
+            End Using
+
+            Console.Clear()
+        Catch ex As Exception
+            Call Write2Log(ex.Message)
+        End Try
     End Sub
 
-    Function ConvertData(intStatSeed As Long) As Long
+    Function ConvertData(ByRef LastOrigStat As Long) As Long
         Dim sw As New Stopwatch
         Dim RecordCount As Long
 
@@ -76,23 +139,23 @@ Module Module1
 
 
         'Get Startup StatusID value from keyboard
-        Console.WriteLine("Enter the last read StatusID. Enter 0 if starting over.")
-        Console.Write("Enter StatusID value here: ")
-        strKeyVal = Console.ReadLine()
-        If IsNumeric(strKeyVal) Then
-            KeyVal = CInt(strKeyVal)
-            If KeyVal >= 0 Then
-                If MsgBox("Entered value is: " & KeyVal.ToString & vbCrLf & "Do you want to proceed?", MsgBoxStyle.YesNo) = vbNo Then
-                    End
-                End If
-            Else
-                MsgBox("Value must be positive or zero, loser.", MsgBoxStyle.Critical, "Data Entry Validation")
-                End
-            End If
-        Else
-            MsgBox("Value Is Not numeric.", MsgBoxStyle.Critical, "Data Entry Validation")
-            End
-        End If
+        'Console.WriteLine("Enter the last read StatusID. Enter 0 if starting over.")
+        'Console.Write("Enter StatusID value here: ")
+        'strKeyVal = Console.ReadLine()
+        'If IsNumeric(strKeyVal) Then
+        'KeyVal = CInt(strKeyVal)
+        'If KeyVal >= 0 Then
+        'If MsgBox("Entered value is: " & KeyVal.ToString & vbCrLf & "Do you want to proceed?", MsgBoxStyle.YesNo) = vbNo Then
+        'End
+        'End If
+        'Else
+        'MsgBox("Value must be positive or zero, loser.", MsgBoxStyle.Critical, "Data Entry Validation")
+        'End
+        'End If
+        'Else
+        'MsgBox("Value Is Not numeric.", MsgBoxStyle.Critical, "Data Entry Validation")
+        'End
+        'End If
 
         'Generate SQL strings
         'Read all rows from Original Status_RST-XVI table
@@ -125,17 +188,7 @@ Module Module1
         End If
 
 
-        'Structure the three new working DataTables
-        'tblNewStatus, tblNewXVICond, tblNewStops
-        If Not MakeStatusTable() = True Then
-            Throw New Exception("Exception making tblNewStatus.")
-        End If
-        If Not MakeXVICondTable() = True Then
-            Throw New Exception("Exception making tblNewXVICond.")
-        End If
-        If Not MakeStopsTable() = True Then
-            Throw New Exception("Exception making tblNewStops.")
-        End If
+
 
         'Start stopwatch for timing purposes
         Console.Clear()
@@ -197,14 +250,14 @@ Module Module1
             'Source Database
             'strConnOld = "Data Source=CT0000141\SQLEXPRESS_RRR;Initial Catalog=ProductionData;Trusted_Connection=Yes;Connection Timeout=15;"
             'strConnOld = "Data Source=CTENG02\ENGSQL2014;Initial Catalog=ProductionData;Trusted_Connection=Yes;Connection Timeout=30;"
-            'strConnOld = "Data Source=CT0000141\SQLEXPRESS_RRR;Initial Catalog=ProductionData;Trusted_Connection=Yes;Connection Timeout=30;"
-            strConnOld = "Data Source=RUSSELLDESKTOP\SQLEXPRESS;Initial Catalog=ProductionData;Trusted_Connection=Yes;Connection Timeout=30;"
+            strConnOld = "Data Source=CT0000141\SQLEXPRESS_RRR;Initial Catalog=ProductionData;Trusted_Connection=Yes;Connection Timeout=30;"
+            'strConnOld = "Data Source=RUSSELLDESKTOP\SQLEXPRESS;Initial Catalog=ProductionData;Trusted_Connection=Yes;Connection Timeout=30;"
 
             'Destination Database
             'strConnNew = "Data Source=CT0000141\SQLEXPRESS_RRR;Initial Catalog=ProductionData;Trusted_Connection=Yes;Connection Timeout=30;"
             'strConnNew = "Data Source=CTENG02\ENGSQL2017;Initial Catalog=DCAP_Data;Trusted_Connection=Yes;Connection Timeout=30;"
-            'strConnNew = "Data Source=CT0000141\SQLEXPRESS_RRR;Initial Catalog=DCAP_Data;Trusted_Connection=Yes;Connection Timeout=30;"
-            strConnNew = "Data Source=RUSSELLDESKTOP\SQLEXPRESS;Initial Catalog=DCAP_Data;Trusted_Connection=Yes;Connection Timeout=30;"
+            strConnNew = "Data Source=CT0000141\SQLEXPRESS_RRR;Initial Catalog=DCAP_Data;Trusted_Connection=Yes;Connection Timeout=30;"
+            'strConnNew = "Data Source=RUSSELLDESKTOP\SQLEXPRESS;Initial Catalog=DCAP_Data;Trusted_Connection=Yes;Connection Timeout=30;"
 
             SetConnections = True
         Catch ex As Exception
@@ -230,7 +283,7 @@ Module Module1
         End Using
     End Sub
 
-    Public Function MakeStatusTable() As Boolean
+    Public Function MakeStatusTable(Seed As Long) As Boolean
         MakeStatusTable = False
         ' Create a new DataTable named NewProducts.
         Try
@@ -241,7 +294,7 @@ Module Module1
             StatusID.DataType = System.Type.GetType("System.Int64")
             StatusID.ColumnName = "StatusID"
             StatusID.AutoIncrement = True
-            StatusID.AutoIncrementSeed = 1
+            StatusID.AutoIncrementSeed = Seed
             StatusID.AutoIncrementStep = 1
             tblNewStatus.Columns.Add(StatusID)
 
