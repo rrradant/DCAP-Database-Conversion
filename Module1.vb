@@ -9,7 +9,7 @@ Module Module1
 
     Sub Main()
         Dim StartOrigStat, MaxOrigStat, LastOrigStat, LastNewStat As Long
-        Dim StopCount, AllCount, CurrCount As Long
+        Dim StopCount, AllCount, RunningCount As Long
         Dim dbDA_Stops As SqlDataAdapter
         Dim dbCmdRStops As SqlCommand
         Dim dbConnOld As SqlConnection
@@ -78,169 +78,146 @@ Module Module1
                 'and returns the last New StatusID so the Seed setting can be used for the next batch.
                 LastNewStat = ConvertData(LastOrigStat)
                 If LastNewStat = -1 Then
-                    Throw New Exception("All messed up in ConvertData...")
-                Else
-
+                    Throw New Exception("Exception running ConvertData")
                 End If
 
+                'Write DataTable tblNewStatus into destination Machine_Status
+                Using bulkCopyStatus As SqlBulkCopy = New SqlBulkCopy(strConnNew, SqlBulkCopyOptions.KeepIdentity)
+                    bulkCopyStatus.DestinationTableName = "dbo.[Machine_Status]"
+                    bulkCopyStatus.WriteToServer(tblNewStatus)
+                End Using
+
+                'Write DataTable tblNewXVICond into destination EquipCond_RST-XVI
+                Using bulkCopyCond As SqlBulkCopy = New SqlBulkCopy(strConnNew) ', SqlBulkCopyOptions.KeepIdentity)
+                    bulkCopyCond.DestinationTableName = "dbo.[EquipCond_RST-XVI]"
+                    bulkCopyCond.WriteToServer(tblNewXVICond)
+                End Using
+
+                'Write DataTable tblNewStops into destination Stops
+                Using bulkCopyStops As SqlBulkCopy = New SqlBulkCopy(strConnNew) ', SqlBulkCopyOptions.KeepIdentity)
+                    bulkCopyStops.DestinationTableName = "dbo.[Stops]"
+                    bulkCopyStops.WriteToServer(tblNewStops)
+                End Using
 
                 'The LastOrigStat value returned is equal to the Max in the table
                 'All done. If not, reseed and repeat.
                 If LastOrigStat = MaxOrigStat Then
                     AllDone = True
                 Else
+                    tblNewStatus.Clear()
                     tblNewStatus.Columns(0).AutoIncrementSeed = LastNewStat + 1
                 End If
             Loop Until AllDone = True
 
-            Using bulkCopy As SqlBulkCopy = New SqlBulkCopy(strConnNew, SqlBulkCopyOptions.KeepIdentity)
-                bulkCopy.DestinationTableName = "dbo.[Machine_Status]"
-                Try
-                    bulkCopy.WriteToServer(tblNewStatus)
-                Catch ex As Exception
-                    MsgBox(ex.Message)
-                End Try
-
-                bulkCopy.DestinationTableName = "dbo.[EquipCond_RST-XVI]"
-                Try
-                    bulkCopy.WriteToServer(tblNewXVICond)
-                Catch ex As Exception
-                    MsgBox(ex.Message)
-                End Try
-
-                bulkCopy.DestinationTableName = "dbo.[Stops]"
-                Try
-                    bulkCopy.WriteToServer(tblNewStops)
-                Catch ex As Exception
-                    MsgBox(ex.Message)
-                End Try
-            End Using
 
             Console.Clear()
         Catch ex As Exception
-            Call Write2Log(ex.Message)
+            MsgBox(ex.Message)
+            Call Write2Log("Main", "", ex.Message)
         End Try
     End Sub
 
     Function ConvertData(ByRef LastOrigStat As Long) As Long
+        'Receives starting Original StatusID
+        'Returns the last new AutoIdendity value created for seeding purposes.
+        ConvertData = -1
         Dim sw As New Stopwatch
         Dim RecordCount As Long
+        Dim intOrigStatusID, intNewStatusID As Long
 
-        Dim dbDT_Orig As DataTable
         Dim FStops As DataRow()
         Dim dbDA_Orig As SqlDataAdapter
-        Dim dbCmdRead, dbCmdWIDList As SqlCommand
+        Dim dbDT_Orig As DataTable
+        Dim dbCmdRead As SqlCommand
         Dim dbConnOld, dbConnNew As SqlConnection
 
-        Dim strReadOrigSQL, strReadStopsSQL, strWriteStatusIDConverted As String
-        Dim strKeyVal As String
-        Dim n, i, KeyVal As Long
+        Dim strReadOrigSQL As String
+        Dim n, i As Long
         Dim TSpan1, TSpan2 As TimeSpan
+        Try
+            'Generate SQL strings
+            'Read all rows from Original Status_RST-XVI table
+            strReadOrigSQL = "SELECT TOP (5) * FROM [Status_RST-XVI] Where (Stamp >= CONVERT(DATETIME, '2019-04-01 00:00:00', 102)) AND " _
+                        & "(StatusID > " & LastOrigStat.ToString & ") ORDER BY STAMP ASC;"
 
+            'Manage SQL Connections
+            dbConnOld = New SqlConnection(strConnOld)
+            dbConnNew = New SqlConnection(strConnNew)
+            dbConnOld.Open()
+            dbConnNew.Open()
 
-        'Get Startup StatusID value from keyboard
-        'Console.WriteLine("Enter the last read StatusID. Enter 0 if starting over.")
-        'Console.Write("Enter StatusID value here: ")
-        'strKeyVal = Console.ReadLine()
-        'If IsNumeric(strKeyVal) Then
-        'KeyVal = CInt(strKeyVal)
-        'If KeyVal >= 0 Then
-        'If MsgBox("Entered value is: " & KeyVal.ToString & vbCrLf & "Do you want to proceed?", MsgBoxStyle.YesNo) = vbNo Then
-        'End
-        'End If
-        'Else
-        'MsgBox("Value must be positive or zero, loser.", MsgBoxStyle.Critical, "Data Entry Validation")
-        'End
-        'End If
-        'Else
-        'MsgBox("Value Is Not numeric.", MsgBoxStyle.Critical, "Data Entry Validation")
-        'End
-        'End If
+            'Assign SQLCommand Objects their CommandText and Connection information
+            dbCmdRead = New SqlCommand(strReadOrigSQL, dbConnOld) : dbCmdRead.CommandTimeout = 0
 
-        'Generate SQL strings
-        'Read all rows from Original Status_RST-XVI table
-        strReadOrigSQL = "SELECT * FROM [Status_RST-XVI] Where (Stamp >= CONVERT(DATETIME, '2019-04-01 00:00:00', 102)) AND (StatusID > " & KeyVal.ToString & ") ORDER BY STAMP ASC;"
-
-        'Update the StatusIDList for the selected StatusID to be Converted=true
-        strWriteStatusIDConverted = "UPDATE StatusIDList SET [Converted] = 1 WHERE ([StatusID] = 0 );"
-
-        'Manage SQL Connections
-        dbConnOld = New SqlConnection(strConnOld)
-        dbConnNew = New SqlConnection(strConnNew)
-        dbConnOld.Open()
-        dbConnNew.Open()
-
-        'Assign SQLCommand Objects their CommandText and Connection information
-        dbCmdRead = New SqlCommand(strReadOrigSQL, dbConnOld) : dbCmdRead.CommandTimeout = 0
-        'dbCmdRStops = New SqlCommand(strReadStopsSQL, dbConnOld) : dbCmdRStops.CommandTimeout = 0
-        dbCmdWIDList = New SqlCommand(strWriteStatusIDConverted, dbConnOld) : dbCmdWIDList.CommandTimeout = 0
-
-        Console.WriteLine("Preparing Queries...")
-
-        'Start by filling Datatable with Original Status_RST-XVI rows
-        dbDT_Orig = New DataTable
-        dbDA_Orig = New SqlDataAdapter(dbCmdRead)
-        RecordCount = dbDA_Orig.Fill(dbDT_Orig)
-        If RecordCount = 0 Then
-            Throw New Exception("Invalid RecordCount from initial dbDT_Orig datatable fill command.")
-        Else
-            'Console.WriteLine("Total Status Records: " & Format(RecordCount, "N0"))
-        End If
-
-
-
-
-        'Start stopwatch for timing purposes
-        Console.Clear()
-        sw.Start()
-        TSpan1 = TimeSpan.FromSeconds(0)
-
-        Dim intOrigStatusID, intNewStatusID As Long
-        For Each row In dbDT_Orig.Rows
-            n = n + 1
-            'Console.CursorLeft = 0 : Console.CursorTop = 8
-            'Console.WriteLine("Processing record: " & Format(n, "N0"))
-            If n Mod 500 = 0 Then
-                TSpan1 = TimeSpan.FromSeconds(Int(sw.Elapsed.TotalSeconds))
-                If n > 10000 Then
-                    TSpan2 = TimeSpan.FromSeconds(Int(((RecordCount - n) * sw.Elapsed.TotalSeconds) / n))
-                End If
-                Console.CursorLeft = 0
-                Console.CursorTop = 2
-                Console.WriteLine("Total Active Records: " & Format(RecordCount, "N0")) ' Records
-                Console.WriteLine("Records Processed:    " & Format(n, "N0")) ' Records Processed
-                Console.WriteLine("Time Elapsed:" & vbTab & TSpan1.ToString) ' Elapsed Time
-                Console.WriteLine("Time Remaining:" & vbTab & TSpan2.ToString) ' Time Remaining
+            'Start by filling Datatable with Original Status_RST-XVI rows
+            dbDT_Orig = New DataTable
+            dbDA_Orig = New SqlDataAdapter(dbCmdRead)
+            RecordCount = dbDA_Orig.Fill(dbDT_Orig)
+            If RecordCount = 0 Then
+                Throw New Exception("Invalid RecordCount from initial dbDT_Orig datatable fill command.")
             End If
 
-            Try
-                'Common variables likely to be used:
-                intOrigStatusID = row("StatusID")
-                intNewStatusID = AddStatusRow(row)
+            'Start stopwatch for timing purposes
+            Console.Clear()
+            sw.Start()
+            TSpan1 = TimeSpan.FromSeconds(0)
 
-                'Make New Machine_Status entry
-                If intNewStatusID = 0 Then
-                    Throw New Exception("Exception in AddStatusRow on original StatusID: " & row("StatusID").ToString)
+
+            For Each row In dbDT_Orig.Rows
+                n = n + 1
+                'Console.CursorLeft = 0 : Console.CursorTop = 8
+                'Console.WriteLine("Processing record: " & Format(n, "N0"))
+                If n Mod 500 = 0 Then
+                    TSpan1 = TimeSpan.FromSeconds(Int(sw.Elapsed.TotalSeconds))
+                    If n > 10000 Then
+                        TSpan2 = TimeSpan.FromSeconds(Int(((RecordCount - n) * sw.Elapsed.TotalSeconds) / n))
+                    End If
+                    Console.CursorLeft = 0
+                    Console.CursorTop = 2
+                    Console.WriteLine("Total Active Records: " & Format(RecordCount, "N0")) ' Records
+                    Console.WriteLine("Records Processed:    " & Format(n, "N0")) ' Records Processed
+                    Console.WriteLine("Time Elapsed:" & vbTab & TSpan1.ToString) ' Elapsed Time
+                    Console.WriteLine("Time Remaining:" & vbTab & TSpan2.ToString) ' Time Remaining
                 End If
 
-                'Make New EquipCond_RST-XVI entry
-                If AddXVICondRow(row, intNewStatusID) = 0 Then
-                    Throw New Exception("Exception in AddStatusRow on original StatusID: " & row("StatusID").ToString)
-                End If
+                Try
+                    'Common variables likely to be used:
+                    intOrigStatusID = row("StatusID")
+                    intNewStatusID = AddStatusRow(row)
 
-                'Now, work on the Stops....
-                If row("MachFault") = True Or row("OpStop") = True Then
-                    FStops = dbDT_Stops.Select("StatusID = " & intOrigStatusID.ToString)
-                    For i = 0 To FStops.GetUpperBound(0)
-                        If AddNewStopsRow(FStops(i), intNewStatusID) = 0 Then
+                    'Make New Machine_Status entry
+                    If intNewStatusID = 0 Then
+                        Throw New Exception("Exception in AddStatusRow on original StatusID: " & row("StatusID").ToString)
+                    End If
 
-                        End If
-                    Next
-                End If
-            Catch ex As Exception
-                Call Write2Log(ex.Message)
-            End Try
-        Next
+                    'Make New EquipCond_RST-XVI entry
+                    If AddXVICondRow(row, intNewStatusID) = 0 Then
+                        Throw New Exception("Exception in AddStatusRow on original StatusID: " & row("StatusID").ToString)
+                    End If
+
+                    'Now, work on the Stops....
+                    If row("MachFault") = True Or row("OpStop") = True Then
+                        FStops = dbDT_Stops.Select("StatusID = " & intOrigStatusID.ToString)
+                        For i = 0 To FStops.GetUpperBound(0)
+                            If AddNewStopsRow(FStops(i), intNewStatusID) = 0 Then
+
+                            End If
+                        Next
+                    End If
+                    'This assigns the newly created StatusID in the desitnation table to the function return value.
+                    ConvertData = intNewStatusID
+
+                Catch ex As Exception
+                    Call Write2Log("ConvertData", "", ex.Message)
+                End Try
+            Next
+        Catch ex As Exception
+            MsgBox("Exception Occurred in processing ConvertData.")
+            Call Write2Log("ConvertData", "", ex.Message)
+        Finally
+
+
+        End Try
     End Function
 
     Function SetConnections() As Boolean
@@ -261,26 +238,25 @@ Module Module1
 
             SetConnections = True
         Catch ex As Exception
-            Call Write2Log("Exception setting connection strings. " & ex.Message)
+            Call Write2Log("SetConnections", "", ex.Message)
         End Try
     End Function
 
-    Sub Write2Log(message As String)
+    Sub Write2Log(ProcName As String, Info As String, message As String)
         Dim strLogFile As String
         strLogFile = FileIO.FileSystem.CurrentDirectory.ToString & "\" & My.Application.Info.AssemblyName & ".log"
-        'Checks for existence of INI_File string
-        If Not File.Exists(strLogFile) Then
-            Using writer As New StreamWriter(strLogFile, True)
-                writer.WriteLine(Now().ToString)
-                writer.WriteLine(vbCrLf)
-                writer.Close()
-            End Using
-        End If
-        'Writes info
+        'If Not File.Exists(strLogFile) Then
         Using writer As New StreamWriter(strLogFile, True)
-            writer.WriteLine(message)
+            writer.WriteLine(Now().ToString & vbTab & "Procedure: " & Trim(ProcName))
+            If Not String.IsNullOrEmpty(Trim(Info)) Then
+                writer.WriteLine(vbTab & Trim(Info))
+            End If
+            If Not String.IsNullOrEmpty(Trim(message)) Then
+                writer.WriteLine(vbTab & Trim(message))
+            End If
             writer.Close()
         End Using
+        'End If
     End Sub
 
     Public Function MakeStatusTable(Seed As Long) As Boolean
@@ -379,8 +355,9 @@ Module Module1
 
             MakeStatusTable = True
         Catch ex As Exception
-            MsgBox(ex.Message, MsgBoxStyle.Critical, "Exception in function MakeStatusTable")
             MakeStatusTable = False
+            Call Write2Log("MakeStatusTable", "", ex.Message)
+            MsgBox(ex.Message, MsgBoxStyle.Critical, "Exception in function MakeStatusTable")
         End Try
     End Function
 
@@ -427,8 +404,9 @@ Module Module1
 
             MakeXVICondTable = True
         Catch ex As Exception
-            MsgBox(ex.Message, MsgBoxStyle.Critical, "Exception in function MakeXVICondTable")
             MakeXVICondTable = False
+            Call Write2Log("MakeXVICondTable", "", ex.Message)
+            MsgBox(ex.Message, MsgBoxStyle.Critical, "Exception in function MakeXVICondTable")
         End Try
     End Function
 
@@ -481,8 +459,9 @@ Module Module1
 
             MakeStopsTable = True
         Catch ex As Exception
-            MsgBox(ex.Message, MsgBoxStyle.Critical, "Exception in function MakeStopsTable")
             MakeStopsTable = False
+            Call Write2Log("MakeStopsTable", "", ex.Message)
+            MsgBox(ex.Message, MsgBoxStyle.Critical, "Exception in function MakeStopsTable")
         End Try
     End Function
 
@@ -510,7 +489,9 @@ Module Module1
             tblNewStatus.AcceptChanges()
             AddStatusRow = newStatusRow("StatusID")
         Catch ex As Exception
-            Beep()
+            AddStatusRow = 0
+            Call Write2Log("AddStatusRow", "", ex.Message)
+            MsgBox(ex.Message, MsgBoxStyle.Critical, "Exception in function AddStatusRow")
         End Try
     End Function
 
@@ -528,10 +509,10 @@ Module Module1
             tblNewXVICond.AcceptChanges()
             AddXVICondRow = newCondRow("ECID")
         Catch ex As Exception
-            MsgBox(ex.Message)
-            Beep()
+            AddXVICondRow = 0
+            Call Write2Log("AddXVICondRow", "", ex.Message)
+            MsgBox(ex.Message, MsgBoxStyle.Critical, "Exception in function AddXVICondRow")
         End Try
-
     End Function
 
     Function AddNewStopsRow(appendRow As DataRow, NewID As Long) As Long
@@ -559,10 +540,10 @@ Module Module1
             tblNewStops.AcceptChanges()
             AddNewStopsRow = newStopRow("StopID")
         Catch ex As Exception
-            MsgBox(ex.Message)
-            Beep()
+            AddNewStopsRow = 0
+            Call Write2Log("AddNewStopsRow", "", ex.Message)
+            MsgBox(ex.Message, MsgBoxStyle.Critical, "Exception in function AddNewStopsRow")
         End Try
-
     End Function
 
 End Module
