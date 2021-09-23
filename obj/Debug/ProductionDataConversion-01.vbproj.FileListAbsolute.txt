@@ -21,3 +21,4 @@ C:\Users\rrradant\source\repos\dcap-database-conversion\obj\Debug\ProductionData
 C:\Users\rrradant\source\repos\dcap-database-conversion\obj\Debug\ProductionDataConversion-01.exe
 C:\Users\rrradant\source\repos\dcap-database-conversion\obj\Debug\ProductionDataConversion-01.xml
 C:\Users\rrradant\source\repos\dcap-database-conversion\obj\Debug\ProductionDataConversion-01.pdb
+C:\Users\rrradant\source\repos\dcap-database-conversion\obj\Debug\ProductionDataConversion-01.vbproj.AssemblyReference.cache

@@ -15,7 +15,7 @@ Module Module1
         Dim dbDA_Stops As SqlDataAdapter
         Dim dbCmdRStops As SqlCommand
         Dim dbConnOld As SqlConnection
-        Dim strReadStopsSQL As String
+        Dim tmpSql, strReadStopsSQL As String
         Dim AllDone As Boolean
 
         Try
@@ -28,7 +28,6 @@ Module Module1
             'dbConnNew = New SqlConnection(strConnNew)
             'dbConnNew.Open()
 
-
             'Fill the Stops data table with all the original stops
             'Places full results into DataTable dbDT_Stops
             strReadStopsSQL = "SELECT * FROM [Stops] ;"
@@ -40,23 +39,33 @@ Module Module1
                 Throw New Exception("Invalid RecordCount from initial dbDT_Stops datatable fill command.")
             End If
 
+            'This value can be set to allow for picking up where it previously ended.
+            'Enter the value of the last original StatusID processed. This will be in a message box at the end
+            'and printed in the immediate window, if runn in VS.
+            LastOrigStat = 2000000
+
             'Queries Original Status_RST-XVI to get number or rows.
-            Dim cmdOrig As New SqlCommand("SELECT COUNT([StatusID]) FROM [Status_RST-XVI] Where " _
-                    & "(Stamp >= CONVERT(DATETIME, '2019-04-01 00:00:00', 102));", dbConnOld)
+            tmpSql = "Select COUNT([StatusID]) FROM [Status_RST-XVI] Where " _
+                    & "(Stamp >= CONVERT(DATETIME, '2019-04-01 00:00:00', 102)) AND " _
+                    & "(StatusID > " & LastOrigStat.ToString & " );" ' ORDER BY StatusID ASC;"
+
+            Dim cmdOrig As New SqlCommand(tmpSql, dbConnOld)
             Dim dtOrig = New DataTable
             Dim daOrig = New SqlDataAdapter(cmdOrig)
             AllCount = cmdOrig.ExecuteScalar()
             If AllCount = 0 Then
                 Throw New Exception("Invalid AllCount from initial dbo.Status_RST-XVI table.")
             End If
-            cmdOrig.CommandText = "SELECT MIN(StatusID) FROM [Status_RST-XVI] WHERE " _
-                & "(Stamp >= CONVERT(DATETIME, '2019-04-01 00:00:00', 102))"
+
+            tmpSql = "SELECT MIN(StatusID) FROM [Status_RST-XVI] WHERE " _
+                & "(Stamp >= CONVERT(DATETIME, '2019-04-01 00:00:00', 102)) AND " _
+                & "(StatusID > " & LastOrigStat.ToString & " );" ' ORDER BY StatusID ASC;"
+            cmdOrig.CommandText = tmpSql
             StartOrigStat = cmdOrig.ExecuteScalar
             If StartOrigStat = 0 Then
                 Throw New Exception("Invalid StartOrigStat from initial dbo.Status_RST-XVI table.")
             End If
-            cmdOrig.CommandText = "SELECT MAX(StatusID) FROM [Status_RST-XVI] WHERE " _
-                & "(Stamp >= CONVERT(DATETIME, '2019-04-01 00:00:00', 102))"
+            cmdOrig.CommandText = "SELECT MAX(StatusID) FROM [Status_RST-XVI];"
             MaxOrigStat = cmdOrig.ExecuteScalar
             dtOrig.Dispose() : daOrig.Dispose()
 
@@ -114,6 +123,9 @@ Module Module1
                 'All done. If not, reseed and repeat.
                 If LastOrigStat = MaxOrigStat Then
                     AllDone = True
+                    Call Write2Log("Main", "Last Original StatusID processed was: " & LastOrigStat.ToString, "Write this down!")
+                    Debug.Print("Last Original StatusID processed was: " & LastOrigStat.ToString)
+                    MsgBox("Last Original StatusID processed was: " & LastOrigStat.ToString, MsgBoxStyle.Information, "Write this down!")
                 Else
                     tblNewXVICond.Clear()
                     tblNewStops.Clear()
@@ -154,8 +166,10 @@ Module Module1
 
             'Generate SQL strings
             'Read all rows from Original Status_RST-XVI table
-            strReadOrigSQL = "SELECT TOP (" & BatchSize.ToString & ") * FROM [Status_RST-XVI] Where (Stamp >= CONVERT(DATETIME, '2019-04-01 00:00:00', 102)) AND " _
-                        & "(StatusID > " & LastOrigStat.ToString & ") ORDER BY STAMP ASC;"
+            'strReadOrigSQL = "SELECT TOP (" & BatchSize.ToString & ") * FROM [Status_RST-XVI] Where (Stamp >= CONVERT(DATETIME, '2019-04-01 00:00:00', 102)) AND " _
+            '            & "(StatusID > " & LastOrigStat.ToString & ") ORDER BY STAMP ASC;"
+            strReadOrigSQL = "SELECT TOP (" & BatchSize.ToString & ") * FROM [Status_RST-XVI] WHERE " _
+                        & "(StatusID > " & LastOrigStat.ToString & ") ORDER BY StatusID ASC;"
 
             'Manage SQL Connections
             dbConnOld = New SqlConnection(strConnOld)
@@ -370,7 +384,7 @@ Module Module1
             tblNewStatus.Columns.Add(Speed)
 
             Dim ElapsedTime As DataColumn = New DataColumn()
-            ElapsedTime.DataType = System.Type.GetType("System.Int16")
+            ElapsedTime.DataType = System.Type.GetType("System.Int32")
             ElapsedTime.ColumnName = "ElapsedTime"
             ElapsedTime.AllowDBNull = True
             tblNewStatus.Columns.Add(ElapsedTime)
