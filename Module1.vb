@@ -4,7 +4,9 @@ Imports System.Threading
 
 Module Module1
 
+
     Public strConnOld, strConnNew As String
+    Public BatchSize As Integer
     Public dbDT_Stops, tblNewStatus, tblNewXVICond, tblNewStops As DataTable
 
     Sub Main()
@@ -70,10 +72,19 @@ Module Module1
                 Throw New Exception("Exception making tblNewStops.")
             End If
 
+            'Informational purposes
+            Console.CursorLeft = 0 : Console.CursorTop = 2
+            Console.Write("Started at: " & Now.ToString)
+
             AllDone = False
+            BatchSize = 50000
+            RunningCount = 0
             LastOrigStat = StartOrigStat - 1 'Increment down by 1 for initial batch
             LastNewStat = 0
             Do
+                Console.CursorLeft = 0 : Console.CursorTop = 3
+                Console.Write("Completed " & Format(RunningCount, "N0") & " of " & Format(AllCount, "N0"))
+
                 'This passes the starting StatusID field for the Select query in ConvertData
                 'and returns the last New StatusID so the Seed setting can be used for the next batch.
                 LastNewStat = ConvertData(LastOrigStat)
@@ -107,10 +118,11 @@ Module Module1
                     tblNewStatus.Clear()
                     tblNewStatus.Columns(0).AutoIncrementSeed = LastNewStat + 1
                 End If
+                RunningCount += BatchSize
             Loop Until AllDone = True
 
 
-            Console.Clear()
+            'Console.Clear()
         Catch ex As Exception
             MsgBox(ex.Message)
             Call Write2Log("Main", "", ex.Message)
@@ -137,7 +149,7 @@ Module Module1
         Try
             'Generate SQL strings
             'Read all rows from Original Status_RST-XVI table
-            strReadOrigSQL = "SELECT TOP (5) * FROM [Status_RST-XVI] Where (Stamp >= CONVERT(DATETIME, '2019-04-01 00:00:00', 102)) AND " _
+            strReadOrigSQL = "SELECT TOP (" & BatchSize.ToString & ") * FROM [Status_RST-XVI] Where (Stamp >= CONVERT(DATETIME, '2019-04-01 00:00:00', 102)) AND " _
                         & "(StatusID > " & LastOrigStat.ToString & ") ORDER BY STAMP ASC;"
 
             'Manage SQL Connections
@@ -158,26 +170,29 @@ Module Module1
             End If
 
             'Start stopwatch for timing purposes
-            Console.Clear()
+            'Console.Clear()
+            Console.CursorLeft = 0 : Console.CursorTop = 4
+            Console.Write(Space(40)) '"Batch record: " & Format(n, "N0") & " of " & Format(BatchSize, "N0"))
+
             sw.Start()
             TSpan1 = TimeSpan.FromSeconds(0)
 
-
             For Each row In dbDT_Orig.Rows
                 n = n + 1
-                'Console.CursorLeft = 0 : Console.CursorTop = 8
-                'Console.WriteLine("Processing record: " & Format(n, "N0"))
-                If n Mod 500 = 0 Then
-                    TSpan1 = TimeSpan.FromSeconds(Int(sw.Elapsed.TotalSeconds))
-                    If n > 10000 Then
-                        TSpan2 = TimeSpan.FromSeconds(Int(((RecordCount - n) * sw.Elapsed.TotalSeconds) / n))
-                    End If
-                    Console.CursorLeft = 0
-                    Console.CursorTop = 2
-                    Console.WriteLine("Total Active Records: " & Format(RecordCount, "N0")) ' Records
-                    Console.WriteLine("Records Processed:    " & Format(n, "N0")) ' Records Processed
-                    Console.WriteLine("Time Elapsed:" & vbTab & TSpan1.ToString) ' Elapsed Time
-                    Console.WriteLine("Time Remaining:" & vbTab & TSpan2.ToString) ' Time Remaining
+                If n Mod 100 = 0 Then
+                    Console.CursorLeft = 0 : Console.CursorTop = 4
+                    Console.Write("Batch record: " & Format(n, "N0") & " of " & Format(BatchSize, "N0"))
+
+                    'TSpan1 = TimeSpan.FromSeconds(Int(sw.Elapsed.TotalSeconds))
+                    'If n > 10000 Then
+                    'TSpan2 = TimeSpan.FromSeconds(Int(((RecordCount - n) * sw.Elapsed.TotalSeconds) / n))
+                    'End If
+                    'Console.CursorLeft = 0
+                    'Console.CursorTop = 2
+                    'Console.WriteLine("Total Active Records: " & Format(RecordCount, "N0")) ' Records
+                    'Console.WriteLine("Records Processed:    " & Format(n, "N0")) ' Records Processed
+                    'Console.WriteLine("Time Elapsed:" & vbTab & TSpan1.ToString) ' Elapsed Time
+                    'Console.WriteLine("Time Remaining:" & vbTab & TSpan2.ToString) ' Time Remaining
                 End If
 
                 Try
@@ -206,11 +221,16 @@ Module Module1
                     End If
                     'This assigns the newly created StatusID in the desitnation table to the function return value.
                     ConvertData = intNewStatusID
+                    LastOrigStat = intOrigStatusID
 
                 Catch ex As Exception
                     Call Write2Log("ConvertData", "", ex.Message)
                 End Try
             Next
+            TSpan1 = TimeSpan.FromSeconds(Int(sw.Elapsed.TotalSeconds))
+            Debug.Print(TSpan1.TotalMilliseconds.ToString)
+            Console.CursorLeft = 0 : Console.CursorTop = 5
+            Console.Write("Batch Time: " & TSpan1.ToString)
         Catch ex As Exception
             MsgBox("Exception Occurred in processing ConvertData.")
             Call Write2Log("ConvertData", "", ex.Message)
