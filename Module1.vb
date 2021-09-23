@@ -11,12 +11,14 @@ Module Module1
 
     Sub Main()
         Dim StartOrigStat, MaxOrigStat, LastOrigStat, LastNewStat As Long
-        Dim StopCount, AllCount, RunningCount As Long
+        Dim StopCount, AllCount, RunningCount, KeyVal As Long
         Dim dbDA_Stops As SqlDataAdapter
         Dim dbCmdRStops As SqlCommand
         Dim dbConnOld As SqlConnection
-        Dim tmpSql, strReadStopsSQL As String
+        Dim tmpSql, strReadStopsSQL, strKeyVal As String
         Dim AllDone As Boolean
+        Dim ProgRun As New Stopwatch
+        Dim TSpan2 As New TimeSpan
 
         Try
             'Assign Connection Strings.
@@ -27,6 +29,28 @@ Module Module1
             dbConnOld.Open()
             'dbConnNew = New SqlConnection(strConnNew)
             'dbConnNew.Open()
+
+            'Get Startup StatusID value from keyboard
+            Console.WriteLine("Enter the last read StatusID. Enter 0 if starting over.")
+            Console.Write("Enter StatusID value here: ")
+            strKeyVal = Console.ReadLine()
+            If IsNumeric(strKeyVal) Then
+                KeyVal = CInt(strKeyVal)
+                If KeyVal >= 0 Then
+                    If MsgBox("Entered value is: " & KeyVal.ToString & vbCrLf & "Do you want to proceed?", MsgBoxStyle.YesNo) = vbNo Then
+                        End
+                    End If
+                Else
+                    MsgBox("Value must be positive or zero, loser.", MsgBoxStyle.Critical, "Data Entry Validation")
+                    End
+                End If
+            Else
+                MsgBox("Value Is Not numeric.", MsgBoxStyle.Critical, "Data Entry Validation")
+                End
+            End If
+
+            'Start Stopwatch
+            ProgRun.Start()
 
             'Fill the Stops data table with all the original stops
             'Places full results into DataTable dbDT_Stops
@@ -42,7 +66,8 @@ Module Module1
             'This value can be set to allow for picking up where it previously ended.
             'Enter the value of the last original StatusID processed. This will be in a message box at the end
             'and printed in the immediate window, if runn in VS.
-            LastOrigStat = 2000000
+            'LastOrigStat = 6500000
+            LastOrigStat = KeyVal
 
             'Queries Original Status_RST-XVI to get number or rows.
             tmpSql = "Select COUNT([StatusID]) FROM [Status_RST-XVI] Where " _
@@ -81,8 +106,13 @@ Module Module1
                 Throw New Exception("Exception making tblNewStops.")
             End If
 
+            'This seeds the new DataTable for identity to be appendable to dbo.Machine_Status
+            If Not SeedStatusTable() = True Then
+                Throw New Exception("Exception Seeding tblNewStatus.")
+            End If
+
             'Informational purposes
-            Console.CursorLeft = 0 : Console.CursorTop = 2
+            Console.CursorLeft = 0 : Console.CursorTop = 3
             Console.Write("Started at: " & Now.ToString)
 
             AllDone = False
@@ -91,7 +121,7 @@ Module Module1
             LastOrigStat = StartOrigStat - 1 'Increment down by 1 for initial batch
             LastNewStat = 0
             Do
-                Console.CursorLeft = 0 : Console.CursorTop = 3
+                Console.CursorLeft = 0 : Console.CursorTop = 4
                 Console.Write("Completed " & Format(RunningCount, "N0") & " of " & Format(AllCount, "N0"))
 
                 'This passes the starting StatusID field for the Select query in ConvertData
@@ -133,10 +163,16 @@ Module Module1
                     tblNewStatus.Columns(0).AutoIncrementSeed = LastNewStat + 1
                 End If
                 RunningCount += BatchSize
+                TSpan2 = TimeSpan.FromSeconds(Int(ProgRun.Elapsed.TotalSeconds))
+                Console.CursorLeft = 0 : Console.CursorTop = 7
+                Console.Write("Total Time: " & TSpan2.ToString)
             Loop Until AllDone = True
+            Console.CursorLeft = 0 : Console.CursorTop = 8
+            Console.WriteLine("Process Comnplete. Last StatusID processed was: " & LastOrigStat.ToString)
+            Console.Write("Press any key to end program.")
+            Console.ReadKey()
+            Console.Clear()
 
-
-            'Console.Clear()
         Catch ex As Exception
             MsgBox(ex.Message)
             Call Write2Log("Main", "", ex.Message)
@@ -159,7 +195,7 @@ Module Module1
 
         Dim strReadOrigSQL As String
         Dim n, i As Long
-        Dim TSpan1, TSpan2 As TimeSpan
+        Dim TSpan1 As TimeSpan
         Try
             sw.Start()
             TSpan1 = TimeSpan.FromSeconds(0)
@@ -190,13 +226,13 @@ Module Module1
 
             'Start stopwatch for timing purposes
             'Console.Clear()
-            Console.CursorLeft = 0 : Console.CursorTop = 4
+            Console.CursorLeft = 0 : Console.CursorTop = 5
             Console.Write(Space(40)) '"Batch record: " & Format(n, "N0") & " of " & Format(BatchSize, "N0"))
 
             For Each row In dbDT_Orig.Rows
                 n = n + 1
                 If n Mod 100 = 0 Then
-                    Console.CursorLeft = 0 : Console.CursorTop = 4
+                    Console.CursorLeft = 0 : Console.CursorTop = 5
                     Console.Write("Batch record: " & Format(n, "N0") & " of " & Format(BatchSize, "N0"))
 
                     'TSpan1 = TimeSpan.FromSeconds(Int(sw.Elapsed.TotalSeconds))
@@ -243,16 +279,14 @@ Module Module1
                     Call Write2Log("ConvertData", "", ex.Message)
                 End Try
             Next
-            'TSpan1 = TimeSpan.FromSeconds(Int(sw.Elapsed.TotalSeconds))
+            TSpan1 = TimeSpan.FromSeconds(Int(sw.Elapsed.TotalSeconds))
             'Debug.Print(TSpan1.TotalSeconds.ToString)
-            Console.CursorLeft = 0 : Console.CursorTop = 5
+            Console.CursorLeft = 0 : Console.CursorTop = 6
             Console.Write("Batch Time: " & TSpan1.ToString)
+
         Catch ex As Exception
             MsgBox("Exception Occurred in processing ConvertData.")
             Call Write2Log("ConvertData", "", ex.Message)
-        Finally
-
-
         End Try
     End Function
 
@@ -394,6 +428,33 @@ Module Module1
             MakeStatusTable = False
             Call Write2Log("MakeStatusTable", "", ex.Message)
             MsgBox(ex.Message, MsgBoxStyle.Critical, "Exception in function MakeStatusTable")
+        End Try
+    End Function
+
+    Function SeedStatusTable() As Boolean
+        SeedStatusTable = False
+        Dim tmpSQL As String = "Select MAX([StatusID]) FROM [Machine_Status];"
+        Dim dbConn As SqlConnection
+        Dim OldMax As Long
+        Try
+            dbConn = New SqlConnection(strConnNew)
+            dbConn.Open()
+
+            Dim cmdSeed As New SqlCommand(tmpSQL, dbConn)
+
+            If IsDBNull(cmdSeed.ExecuteScalar()) Then
+                OldMax = 0
+            Else
+                OldMax = cmdSeed.ExecuteScalar()
+            End If
+
+            tblNewStatus.Clear()
+            tblNewStatus.Columns(0).AutoIncrementSeed = OldMax + 1
+
+            SeedStatusTable = True
+        Catch ex As Exception
+            MsgBox(ex.Message)
+            Call Write2Log("SeedStatusTable", "OldMax=" & OldMax.ToString, ex.Message)
         End Try
     End Function
 
