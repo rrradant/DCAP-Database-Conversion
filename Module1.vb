@@ -77,7 +77,7 @@ Module Module1
             Console.Write("Started at: " & Now.ToString)
 
             AllDone = False
-            BatchSize = 50000
+            BatchSize = 8000
             RunningCount = 0
             LastOrigStat = StartOrigStat - 1 'Increment down by 1 for initial batch
             LastNewStat = 0
@@ -115,6 +115,8 @@ Module Module1
                 If LastOrigStat = MaxOrigStat Then
                     AllDone = True
                 Else
+                    tblNewXVICond.Clear()
+                    tblNewStops.Clear()
                     tblNewStatus.Clear()
                     tblNewStatus.Columns(0).AutoIncrementSeed = LastNewStat + 1
                 End If
@@ -147,6 +149,9 @@ Module Module1
         Dim n, i As Long
         Dim TSpan1, TSpan2 As TimeSpan
         Try
+            sw.Start()
+            TSpan1 = TimeSpan.FromSeconds(0)
+
             'Generate SQL strings
             'Read all rows from Original Status_RST-XVI table
             strReadOrigSQL = "SELECT TOP (" & BatchSize.ToString & ") * FROM [Status_RST-XVI] Where (Stamp >= CONVERT(DATETIME, '2019-04-01 00:00:00', 102)) AND " _
@@ -173,9 +178,6 @@ Module Module1
             'Console.Clear()
             Console.CursorLeft = 0 : Console.CursorTop = 4
             Console.Write(Space(40)) '"Batch record: " & Format(n, "N0") & " of " & Format(BatchSize, "N0"))
-
-            sw.Start()
-            TSpan1 = TimeSpan.FromSeconds(0)
 
             For Each row In dbDT_Orig.Rows
                 n = n + 1
@@ -227,8 +229,8 @@ Module Module1
                     Call Write2Log("ConvertData", "", ex.Message)
                 End Try
             Next
-            TSpan1 = TimeSpan.FromSeconds(Int(sw.Elapsed.TotalSeconds))
-            Debug.Print(TSpan1.TotalMilliseconds.ToString)
+            'TSpan1 = TimeSpan.FromSeconds(Int(sw.Elapsed.TotalSeconds))
+            'Debug.Print(TSpan1.TotalSeconds.ToString)
             Console.CursorLeft = 0 : Console.CursorTop = 5
             Console.Write("Batch Time: " & TSpan1.ToString)
         Catch ex As Exception
