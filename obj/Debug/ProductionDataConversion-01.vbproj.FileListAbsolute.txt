@@ -10,3 +10,15 @@ C:\Users\Russell\source\repos\dcap-database-conversion\obj\Debug\ProductionDataC
 C:\Users\Russell\source\repos\dcap-database-conversion\obj\Debug\ProductionDataConversion-01.exe
 C:\Users\Russell\source\repos\dcap-database-conversion\obj\Debug\ProductionDataConversion-01.xml
 C:\Users\Russell\source\repos\dcap-database-conversion\obj\Debug\ProductionDataConversion-01.pdb
+C:\Users\rrradant\source\repos\dcap-database-conversion\bin\Debug\ProductionDataConversion-01.exe.config
+C:\Users\rrradant\source\repos\dcap-database-conversion\bin\Debug\ProductionDataConversion-01.exe
+C:\Users\rrradant\source\repos\dcap-database-conversion\bin\Debug\ProductionDataConversion-01.pdb
+C:\Users\rrradant\source\repos\dcap-database-conversion\bin\Debug\ProductionDataConversion-01.xml
+C:\Users\rrradant\source\repos\dcap-database-conversion\obj\Debug\ProductionDataConversion-01.vbproj.AssemblyReference.cache
+C:\Users\rrradant\source\repos\dcap-database-conversion\obj\Debug\ProductionDataConversion_01.Form1.resources
+C:\Users\rrradant\source\repos\dcap-database-conversion\obj\Debug\ProductionDataConversion_01.Resources.resources
+C:\Users\rrradant\source\repos\dcap-database-conversion\obj\Debug\ProductionDataConversion-01.vbproj.GenerateResource.cache
+C:\Users\rrradant\source\repos\dcap-database-conversion\obj\Debug\ProductionDataConversion-01.vbproj.CoreCompileInputs.cache
+C:\Users\rrradant\source\repos\dcap-database-conversion\obj\Debug\ProductionDataConversion-01.exe
+C:\Users\rrradant\source\repos\dcap-database-conversion\obj\Debug\ProductionDataConversion-01.xml
+C:\Users\rrradant\source\repos\dcap-database-conversion\obj\Debug\ProductionDataConversion-01.pdb

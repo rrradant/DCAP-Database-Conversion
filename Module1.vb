@@ -128,7 +128,8 @@ Module Module1
                 'and returns the last New StatusID so the Seed setting can be used for the next batch.
                 LastNewStat = ConvertData(LastOrigStat)
                 If LastNewStat = -1 Then
-                    Throw New Exception("Exception running ConvertData")
+                    AllDone = True
+                    'Throw New Exception("Exception running ConvertData.  LastNewStat = -1.")
                 End If
 
                 'Write DataTable tblNewStatus into destination Machine_Status
@@ -221,6 +222,7 @@ Module Module1
             dbDA_Orig = New SqlDataAdapter(dbCmdRead)
             RecordCount = dbDA_Orig.Fill(dbDT_Orig)
             If RecordCount = 0 Then
+                Exit Try
                 Throw New Exception("Invalid RecordCount from initial dbDT_Orig datatable fill command.")
             End If
 
@@ -286,6 +288,7 @@ Module Module1
 
         Catch ex As Exception
             MsgBox("Exception Occurred in processing ConvertData.")
+            MsgBox(ex.Message)
             Call Write2Log("ConvertData", "", ex.Message)
         End Try
     End Function
@@ -296,8 +299,8 @@ Module Module1
             'Define connection strings
             'Source Database
             'strConnOld = "Data Source=CT0000141\SQLEXPRESS_RRR;Initial Catalog=ProductionData;Trusted_Connection=Yes;Connection Timeout=15;"
-            'strConnOld = "Data Source=CTENG02\ENGSQL2014;Initial Catalog=ProductionData;Trusted_Connection=Yes;Connection Timeout=30;"
-            strConnOld = "Data Source=CT0000141\SQLEXPRESS_RRR;Initial Catalog=ProductionData;Trusted_Connection=Yes;Connection Timeout=30;"
+            strConnOld = "Data Source=CTENG02\ENGSQL2014;Initial Catalog=ProductionData;Trusted_Connection=Yes;Connection Timeout=30;"
+            'strConnOld = "Data Source=CT0000141\SQLEXPRESS_RRR;Initial Catalog=ProductionData;Trusted_Connection=Yes;Connection Timeout=30;"
             'strConnOld = "Data Source=RUSSELLDESKTOP\SQLEXPRESS;Initial Catalog=ProductionData;Trusted_Connection=Yes;Connection Timeout=30;"
 
             'Destination Database

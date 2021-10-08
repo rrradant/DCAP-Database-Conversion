@@ -1,5 +1,6 @@
 ﻿Module Orig_Main_Module
     Sub Original_Main()
+        Exit Sub
         Dim sw As New Stopwatch
         Dim RecordCount, StopsCount As Long
 
